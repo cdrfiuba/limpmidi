@@ -1,7 +1,11 @@
 const int PIN_LED = 13;
-const int PIN_CONTROL_STEP = 10;
-const int PIN_CONTROL_DIRECTION = 9;
+const int PIN_CONTROL_STEP = 10; // rojo
+const int PIN_CONTROL_DIRECTION = 9; // azul
 const int MAX_POSITION = 80;
+
+const int PERIOD_START = 35; // must be larger than 0
+const int PERIOD_END = 42;
+
 
 const int DIRECTION_BACKWARDS = HIGH;
 const int DIRECTION_FORWARDS = LOW;
@@ -34,7 +38,7 @@ void setup() {
   digitalWrite(PIN_LED, LOW);
   delay(1000);
   
-  currentPeriod = 35; // possible start note
+  currentPeriod = PERIOD_START; // possible start note
   
 }
 
@@ -61,15 +65,17 @@ void loop() {
     currentPosition = 0;
   }
   
+  
   noteChangeCounter++;
   if (noteChangeCounter == 30000) {
     digitalWrite(PIN_LED, (digitalRead(PIN_LED) == LOW) ? HIGH : LOW);
     noteChangeCounter = 0;
     currentPeriod++;
-    if (currentPeriod == 43) { // possible end note
-      currentPeriod = 35;
+    if (currentPeriod == PERIOD_END) { // possible end note
+      currentPeriod = PERIOD_START;
     }
   }
   
+  //delay(10);
   delayMicroseconds(40);
 }
