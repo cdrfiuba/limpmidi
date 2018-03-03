@@ -4,7 +4,10 @@ const long int SERIAL_BPS = 115200;
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 10; // rojo
 const int PIN_CONTROL_DIRECTION = 9; // azul
-const int MAX_POSITION = 2; // fd has 80 tracks
+const int MAX_POSITION = 80; // fd has 80 tracks
+const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 1;
+unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
+
 
 const unsigned int PERIOD_START = 1; // must be larger than 0
 const unsigned int PERIOD_END = 1000;
@@ -27,7 +30,8 @@ const int Bb_3 = 80; // 233 Hz
 const int A_3  = 84; // 220 Hz
 const int END = PERIOD_END;  // loop
 
-const bool PLAY_NOTES = true;
+const bool INITIAL_PLAY_NOTES = false;
+bool playNotes = INITIAL_PLAY_NOTES;
 const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
@@ -45,7 +49,6 @@ const unsigned long NOTE_CHANGE_THRESHOLD = NOTE_CHANGE_THRESHOLD_MS * 1000 / CY
 const int DIRECTION_BACKWARDS = HIGH;
 const int DIRECTION_FORWARDS = LOW;
 
-unsigned long interruptCounter = 0;
 unsigned long currentPosition = 0;
 unsigned long tick = 0;
 unsigned long noteChangeCounter = 0;
@@ -54,6 +57,7 @@ unsigned int currentPeriod = 0;
 int nextNote = 0;
 
 byte incomingByte = 0;
+byte specialByte = 0;
 unsigned int incomingInt = 0;
 
 char debug_string_buffer[20];
@@ -84,50 +88,44 @@ void setup() {
   // 5ms * (158 / 2) = 395ms
   digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_BACKWARDS);
   for (int i = 0; i < MAX_POSITION; i++) {
-    digitalWrite(PIN_CONTROL_STEP, LOW);
     digitalWrite(PIN_CONTROL_STEP, HIGH);
-    delay(10);
+    delay(5);
+    digitalWrite(PIN_CONTROL_STEP, LOW);
+    delay(5);
   }
   digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
   for (int i = 0; i < MAX_POSITION / 2; i++) {
-    digitalWrite(PIN_CONTROL_STEP, LOW);
     digitalWrite(PIN_CONTROL_STEP, HIGH);
-    delay(10);
+    delay(5);
+    digitalWrite(PIN_CONTROL_STEP, LOW);
+    delay(5);
   }
   digitalWrite(PIN_LED, LOW);
 
   currentPeriod = 0;
   
   delay(2000);
-  
+
 }
 
 void loop() {
   
-  /*interruptCounter++;
-  // 40us * 10000 = 400ms
-  if (interruptCounter == 10) {
-    digitalWrite(PIN_LED, (digitalRead(PIN_LED) == LOW) ? HIGH : LOW);
-    interruptCounter = 0;
-  }*/
-
   // move motor every n ticks
   tick++;
   if (tick == currentPeriod) {
     digitalWrite(PIN_CONTROL_STEP, HIGH);
     digitalWrite(PIN_CONTROL_STEP, LOW);
-    //digitalWrite(PIN_LED, (digitalRead(PIN_LED) == LOW) ? HIGH : LOW);
     currentPosition++;
     tick = 0;
   }
   // toggle position
-  if (currentPosition == MAX_POSITION - 1) {
+  if (currentPosition == maxMotorMovement) {
     digitalWrite(PIN_CONTROL_DIRECTION, (digitalRead(PIN_CONTROL_DIRECTION) == LOW) ? HIGH : LOW);
     currentPosition = 0;
   }
   
   // every 40ms, change note
-  if (PLAY_NOTES) {
+  if (playNotes) {
     noteChangeCounter++;
     if (noteChangeCounter == NOTE_CHANGE_THRESHOLD * 2) {
       digitalWrite(PIN_LED, (digitalRead(PIN_LED) == LOW) ? HIGH : LOW);
@@ -140,15 +138,10 @@ void loop() {
         currentPeriod = NOTE_LIST[noteListIndex];
         noteListIndex++;
       }
-      
-      printCurrentNote();
-      
       tick = 0;
       noteSilenceCounter = 0;
-      //if (USE_SERIAL) {
-      //  debug("%i ", currentPeriod);
-      //  Serial.print("\n");
-      //}
+      
+      printCurrentNote();
     }
   }
   
@@ -163,48 +156,80 @@ void loop() {
         Serial.println("rest");
       }
     }
-  }  
+  }
 
   if (USE_SERIAL) {
     if (Serial.available() > 0) {
-      //incomingInt = Serial.parseInt();
-      //if (incomingInt >= PERIOD_START && incomingInt <= PERIOD_END) {
-      //  Serial.println(incomingInt);
-      //  currentPeriod = incomingInt;
-      //  tick = 0;
-      //}
       incomingByte = Serial.read();
       switch (incomingByte) {
-        case 'm': currentPeriod = B_4;  if (USE_SERIAL) {Serial.println("B4");}  break;
-        case 'j': currentPeriod = Bb_4; if (USE_SERIAL) {Serial.println("Bb4");} break;
-        case 'n': currentPeriod = A_4;  if (USE_SERIAL) {Serial.println("A4");}  break;
-        case 'h': currentPeriod = Ab_4; if (USE_SERIAL) {Serial.println("Ab4");} break;
-        case 'b': currentPeriod = G_4;  if (USE_SERIAL) {Serial.println("G4");}  break;
-        case 'g': currentPeriod = Gb_4; if (USE_SERIAL) {Serial.println("Gb4");} break;
-        case 'v': currentPeriod = F_4;  if (USE_SERIAL) {Serial.println("F4");}  break;
+        case 'u': currentPeriod = B_4;  break;
+        case '7': currentPeriod = Bb_4; break;
+        case 'y': currentPeriod = A_4;  break;
+        case '6': currentPeriod = Ab_4; break;
+        case 't': currentPeriod = G_4;  break;
+        case '5': currentPeriod = Gb_4; break;
+        case 'r': currentPeriod = F_4;  break;
+        case 'e': currentPeriod = E_4;  break;
+        case '3': currentPeriod = Eb_4; break;
+        case 'w': currentPeriod = D_4;  break;
+        case '2': currentPeriod = Db_4; break;
+        case 'q': currentPeriod = C_4;  break; // C4
         
-        case 'c': currentPeriod = E_4;  if (USE_SERIAL) {Serial.println("E4");}  break;
-        case 'd': currentPeriod = Eb_4; if (USE_SERIAL) {Serial.println("Eb4");} break;
-        case 'x': currentPeriod = D_4;  if (USE_SERIAL) {Serial.println("D4");}  break;
-        case 's': currentPeriod = Db_4; if (USE_SERIAL) {Serial.println("Db4");} break;
-        case 'z': currentPeriod = C_4;  if (USE_SERIAL) {Serial.println("C4");}  break;
+        case '-': currentPeriod = E_4;  break;
+        case '\'': currentPeriod = Eb_4; break;
+        case '.': currentPeriod = D_4;  break;
+        case 'l': currentPeriod = Db_4; break;
+        case ',': currentPeriod = C_4;  break; // C4
+        case 'm': currentPeriod = B_3;  break;
+        case 'j': currentPeriod = Bb_3; break;
+        case 'n': currentPeriod = A_3;  break;
         
-        case 'p': currentPeriod = E_4;  if (USE_SERIAL) {Serial.println("E4");}  break;
-        case '0': currentPeriod = Eb_4; if (USE_SERIAL) {Serial.println("Eb4");} break;
-        case 'o': currentPeriod = D_4;  if (USE_SERIAL) {Serial.println("D4");}  break;
-        case '9': currentPeriod = Db_4; if (USE_SERIAL) {Serial.println("Db4");} break;
-        case 'i': currentPeriod = C_4;  if (USE_SERIAL) {Serial.println("C4");}  break;
-        
-        case 'u': currentPeriod = B_3;  if (USE_SERIAL) {Serial.println("B3");}  break;
-        case '7': currentPeriod = Bb_3; if (USE_SERIAL) {Serial.println("Bb3");} break;
-        case 'y': currentPeriod = A_3;  if (USE_SERIAL) {Serial.println("A3");}  break;
+        case '!':
+          specialByte = Serial.read();
+          switch (specialByte) {
+            case 'b': // move motor backwards 20 steps
+              digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_BACKWARDS);
+              for (int i = 0; i < 20; i++) {
+                digitalWrite(PIN_CONTROL_STEP, HIGH);
+                digitalWrite(PIN_CONTROL_STEP, LOW);
+                delay(10);
+              }
+              Serial.println("move motor backwards");
+              break;
+            case 'f': // move motor forwards
+              digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
+              for (int i = 0; i < 20; i++) {
+                digitalWrite(PIN_CONTROL_STEP, HIGH);
+                digitalWrite(PIN_CONTROL_STEP, LOW);
+                delay(10);
+              }
+              Serial.println("move motor forwards");
+              break;
+            case 'm': // move motor forwards
+              incomingInt = Serial.parseInt();
+              if (incomingInt > 0) {
+                maxMotorMovement = incomingInt;
+                Serial.print("maxMotorMovement: ");
+                Serial.println(maxMotorMovement);
+              }
+              break;
+            case 'p': // play / pause
+              if (playNotes) {
+                Serial.println("pause");
+              } else {
+                Serial.println("play");
+              }
+              playNotes = !playNotes;
+              break;
+          }
+          break;
       }
       tick = 0;
       noteSilenceCounter = 0;
+      printCurrentNote();
     }
   }
   
-  //delay(10);
   delayMicroseconds(CYCLE_PERIOD);
 }
 
@@ -226,7 +251,6 @@ void printCurrentNote() {
       case B_3:  Serial.println("B3");  break;
       case Bb_3: Serial.println("Bb3"); break;
       case A_3:  Serial.println("A3");  break;
-    }
-    
+    }    
   }
 }
