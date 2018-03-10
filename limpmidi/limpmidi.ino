@@ -5,7 +5,7 @@ const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 10; // rojo
 const int PIN_CONTROL_DIRECTION = 9; // azul
 const int MAX_POSITION = 80; // fd has 80 tracks
-const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 1;
+const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 160; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
 
 
@@ -30,7 +30,7 @@ const int Bb_3 = 80; // 233 Hz
 const int A_3  = 84; // 220 Hz
 const int END = PERIOD_END;  // loop
 
-const bool INITIAL_PLAY_NOTES = false;
+const bool INITIAL_PLAY_NOTES = true;
 bool playNotes = INITIAL_PLAY_NOTES;
 const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
@@ -50,6 +50,8 @@ const int DIRECTION_BACKWARDS = HIGH;
 const int DIRECTION_FORWARDS = LOW;
 
 unsigned long currentPosition = 0;
+bool currentDirection = false;
+bool currentStep = false;
 unsigned long tick = 0;
 unsigned long noteChangeCounter = 0;
 unsigned long noteSilenceCounter = 0;
@@ -94,12 +96,12 @@ void setup() {
     delay(5);
   }
   digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
-  for (int i = 0; i < MAX_POSITION / 2; i++) {
-    digitalWrite(PIN_CONTROL_STEP, HIGH);
-    delay(5);
-    digitalWrite(PIN_CONTROL_STEP, LOW);
-    delay(5);
-  }
+  //for (int i = 0; i < MAX_POSITION / 2; i++) {
+  //  digitalWrite(PIN_CONTROL_STEP, HIGH);
+  //  delay(5);
+  //  digitalWrite(PIN_CONTROL_STEP, LOW);
+  //  delay(5);
+  //}
   digitalWrite(PIN_LED, LOW);
 
   currentPeriod = 0;
@@ -113,14 +115,18 @@ void loop() {
   // move motor every n ticks
   tick++;
   if (tick == currentPeriod) {
-    digitalWrite(PIN_CONTROL_STEP, HIGH);
-    digitalWrite(PIN_CONTROL_STEP, LOW);
+    digitalWrite(PIN_CONTROL_STEP, currentStep);
+    digitalWrite(PIN_CONTROL_DIRECTION, currentDirection);
+    currentStep = !currentStep;
     currentPosition++;
+    //Serial.println("step");
     tick = 0;
   }
   // toggle position
   if (currentPosition == maxMotorMovement) {
-    digitalWrite(PIN_CONTROL_DIRECTION, (digitalRead(PIN_CONTROL_DIRECTION) == LOW) ? HIGH : LOW);
+    currentDirection = !currentDirection;
+    //digitalWrite(PIN_CONTROL_DIRECTION, (digitalRead(PIN_CONTROL_DIRECTION) == LOW) ? HIGH : LOW);
+    //Serial.println("change direction");
     currentPosition = 0;
   }
   
@@ -205,12 +211,13 @@ void loop() {
               }
               Serial.println("move motor forwards");
               break;
-            case 'm': // move motor forwards
+            case 'm': // set the max motor movement
               incomingInt = Serial.parseInt();
               if (incomingInt > 0) {
                 maxMotorMovement = incomingInt;
                 Serial.print("maxMotorMovement: ");
                 Serial.println(maxMotorMovement);
+                currentPosition = 0;
               }
               break;
             case 'p': // play / pause
@@ -220,6 +227,11 @@ void loop() {
                 Serial.println("play");
               }
               playNotes = !playNotes;
+              break;
+            case 's': // stop
+              Serial.println("stop");
+              playNotes = false;
+              noteListIndex = 0;
               break;
           }
           break;
