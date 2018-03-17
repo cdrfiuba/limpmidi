@@ -1,3 +1,5 @@
+#include <TimerOne.h>
+
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
 
@@ -5,12 +7,11 @@ const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 10; // rojo
 const int PIN_CONTROL_DIRECTION = 9; // azul
 const int MAX_POSITION = 80; // fd has 80 tracks
-const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 160; // 160 produces full movement, 2 makes louder sound
+const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 2; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
 
-
-const unsigned int PERIOD_START = 1; // must be larger than 0
-const unsigned int PERIOD_END = 1000;
+const int DIRECTION_BACKWARDS = HIGH;
+const int DIRECTION_FORWARDS = LOW;
 
 const int REST = 0;  // silence
 const int B_4  = 38; // 494 Hz
@@ -28,7 +29,7 @@ const int C_4  = 72; // 262 Hz
 const int B_3  = 76; // 247 Hz
 const int Bb_3 = 80; // 233 Hz
 const int A_3  = 84; // 220 Hz
-const int END = PERIOD_END;  // loop
+const int END = 1000;  // loop
 
 const bool INITIAL_PLAY_NOTES = true;
 bool playNotes = INITIAL_PLAY_NOTES;
@@ -39,24 +40,21 @@ const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
   REST, END
 };
-int noteListIndex = 0;
+unsigned int noteListIndex = 0;
 
-const int CYCLE_PERIOD = 22; // microseconds
-const unsigned long NOTE_CHANGE_THRESHOLD_MS = 100; // ms
-const unsigned long NOTE_CHANGE_THRESHOLD = NOTE_CHANGE_THRESHOLD_MS * 1000 / CYCLE_PERIOD; //300ms
+const unsigned int CYCLE_PERIOD = 41; // microseconds
+const unsigned int NOTE_DURATION_MS = 100; // ms
+const unsigned int NOTE_CHANGE_THRESHOLD = NOTE_DURATION_MS * 1000UL / CYCLE_PERIOD; //300ms
 
+volatile unsigned int currentPosition = 0;
+volatile bool currentDirection = false;
+volatile bool currentStep = false;
+volatile unsigned int tick = 0;
+volatile unsigned int currentPeriod = 0;
 
-const int DIRECTION_BACKWARDS = HIGH;
-const int DIRECTION_FORWARDS = LOW;
-
-unsigned long currentPosition = 0;
-bool currentDirection = false;
-bool currentStep = false;
-unsigned long tick = 0;
-unsigned long noteChangeCounter = 0;
-unsigned long noteSilenceCounter = 0;
-unsigned int currentPeriod = 0;
-int nextNote = 0;
+unsigned int noteChangeCounter = 0;
+unsigned int noteSilenceCounter = 0;
+unsigned int nextNote = 0;
 
 byte incomingByte = 0;
 byte specialByte = 0;
@@ -107,11 +105,14 @@ void setup() {
   currentPeriod = 0;
   
   delay(2000);
+  
+  Timer1.initialize(CYCLE_PERIOD);
+  Timer1.attachInterrupt(noteSetter);
+  Timer1.start();
 
 }
 
-void loop() {
-  
+void noteSetter() {
   // move motor every n ticks
   tick++;
   if (tick == currentPeriod) {
@@ -119,16 +120,16 @@ void loop() {
     digitalWrite(PIN_CONTROL_DIRECTION, currentDirection);
     currentStep = !currentStep;
     currentPosition++;
-    //Serial.println("step");
     tick = 0;
   }
   // toggle position
   if (currentPosition == maxMotorMovement) {
     currentDirection = !currentDirection;
-    //digitalWrite(PIN_CONTROL_DIRECTION, (digitalRead(PIN_CONTROL_DIRECTION) == LOW) ? HIGH : LOW);
-    //Serial.println("change direction");
     currentPosition = 0;
   }
+}
+
+void loop() {
   
   // every 40ms, change note
   if (playNotes) {
@@ -242,6 +243,7 @@ void loop() {
     }
   }
   
+  //Serial.println("no entiendo por que, no entiendo por que");
   delayMicroseconds(CYCLE_PERIOD);
 }
 
