@@ -13,25 +13,51 @@ unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
 const int DIRECTION_BACKWARDS = HIGH;
 const int DIRECTION_FORWARDS = LOW;
 
-const int REST = 0;  // silence
-const int B_4  = 38; // 494 Hz
-const int Bb_4 = 40; // 466 Hz
-const int A_4  = 42; // 440 Hz
-const int Ab_4 = 45; // 415 Hz
-const int G_4  = 48; // 392 Hz
-const int Gb_4 = 51; // 370 Hz
-const int F_4  = 54; // 349 Hz
-const int E_4  = 57; // 329 Hz
-const int Eb_4 = 60; // 311 Hz
-const int D_4  = 64; // 294 Hz
-const int Db_4 = 68; // 277 Hz
-const int C_4  = 72; // 262 Hz
-const int B_3  = 76; // 247 Hz
-const int Bb_3 = 80; // 233 Hz
-const int A_3  = 84; // 220 Hz
+const int REST = 0;   // silence
+const int A_5  = 21;  // 880 Hz
+
+const int Ab_5 = 22;  // ? Hz
+const int G_5  = 23;  // ? Hz
+const int Gb_5 = 24;  // ? Hz
+const int F_5  = 26;  // ? Hz
+const int E_5  = 28;  // ? Hz
+const int Eb_5 = 30;  // ? Hz
+const int D_5  = 32;  // ? Hz
+const int Db_5 = 34;  // ? Hz
+const int C_5  = 36;  // ? Hz
+
+const int B_4  = 38;  // 494 Hz
+const int Bb_4 = 40;  // 466 Hz
+const int A_4  = 42;  // 440 Hz
+const int Ab_4 = 45;  // 415 Hz
+const int G_4  = 48;  // 392 Hz
+const int Gb_4 = 51;  // 370 Hz
+const int F_4  = 54;  // 349 Hz
+const int E_4  = 57;  // 329 Hz
+const int Eb_4 = 60;  // 311 Hz
+const int D_4  = 64;  // 294 Hz
+const int Db_4 = 68;  // 277 Hz
+const int C_4  = 72;  // 262 Hz
+const int B_3  = 76;  // 247 Hz
+const int Bb_3 = 80;  // 233 Hz
+const int A_3  = 84;  // 220 Hz
+
+const int Ab_3 = 88;  // ? Hz
+const int G_3  = 92;  // ? Hz
+const int Gb_3 = 96;  // ? Hz
+const int F_3  = 104;  // ? Hz
+const int E_3  = 112;  // ? Hz
+const int Eb_3 = 120;  // ? Hz
+const int D_3  = 128;  // ? Hz
+const int Db_3 = 136;  // ? Hz
+const int C_3  = 144;  // ? Hz
+const int B_2  = 152;  // ? Hz
+const int Bb_2 = 160;  // ? Hz
+
+const int A_2  = 168; // 110 Hz
 const int END = 1000;  // loop
 
-const bool INITIAL_PLAY_NOTES = true;
+const bool INITIAL_PLAY_NOTES = false;
 bool playNotes = INITIAL_PLAY_NOTES;
 const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
@@ -51,6 +77,7 @@ volatile bool currentDirection = false;
 volatile bool currentStep = false;
 volatile unsigned int tick = 0;
 volatile unsigned int currentPeriod = 0;
+bool playCurrentNote = false;
 
 unsigned int noteChangeCounter = 0;
 unsigned int noteSilenceCounter = 0;
@@ -113,19 +140,21 @@ void setup() {
 }
 
 void noteSetter() {
-  // move motor every n ticks
-  tick++;
-  if (tick == currentPeriod) {
-    digitalWrite(PIN_CONTROL_STEP, currentStep);
-    digitalWrite(PIN_CONTROL_DIRECTION, currentDirection);
-    currentStep = !currentStep;
-    currentPosition++;
-    tick = 0;
-  }
-  // toggle position
-  if (currentPosition == maxMotorMovement) {
-    currentDirection = !currentDirection;
-    currentPosition = 0;
+  if (!playNotes && playCurrentNote) {
+    // move motor every n ticks
+    tick++;
+    if (tick == currentPeriod) {
+      digitalWrite(PIN_CONTROL_STEP, currentStep);
+      digitalWrite(PIN_CONTROL_DIRECTION, currentDirection);
+      currentStep = !currentStep;
+      currentPosition++;
+      tick = 0;
+    }
+    // toggle position
+    if (currentPosition == maxMotorMovement) {
+      currentDirection = !currentDirection;
+      currentPosition = 0;
+    }
   }
 }
 
@@ -150,17 +179,17 @@ void loop() {
       
       printCurrentNote();
     }
-  }
   
-  // if a note is playing, every NOTE_CHANGE_THRESHOLD_MS ms, silence note
-  if (currentPeriod > 0) {
-    noteSilenceCounter++;
-    if (noteSilenceCounter == NOTE_CHANGE_THRESHOLD) {
-      noteSilenceCounter = 0;
-      currentPeriod = 0;
-      tick = 0;
-      if (USE_SERIAL) {
-        Serial.println("rest");
+    // if a note is playing, every NOTE_CHANGE_THRESHOLD_MS ms, silence note
+    if (currentPeriod > 0) {
+      noteSilenceCounter++;
+      if (noteSilenceCounter == NOTE_CHANGE_THRESHOLD) {
+        noteSilenceCounter = 0;
+        currentPeriod = 0;
+        tick = 0;
+        if (USE_SERIAL) {
+          Serial.println("rest");
+        }
       }
     }
   }
@@ -168,28 +197,52 @@ void loop() {
   if (USE_SERIAL) {
     if (Serial.available() > 0) {
       incomingByte = Serial.read();
+      
       switch (incomingByte) {
-        case 'u': currentPeriod = B_4;  break;
-        case '7': currentPeriod = Bb_4; break;
-        case 'y': currentPeriod = A_4;  break;
-        case '6': currentPeriod = Ab_4; break;
-        case 't': currentPeriod = G_4;  break;
-        case '5': currentPeriod = Gb_4; break;
-        case 'r': currentPeriod = F_4;  break;
-        case 'e': currentPeriod = E_4;  break;
-        case '3': currentPeriod = Eb_4; break;
-        case 'w': currentPeriod = D_4;  break;
-        case '2': currentPeriod = Db_4; break;
-        case 'q': currentPeriod = C_4;  break; // C4
-        
-        case '-': currentPeriod = E_4;  break;
-        case '\'': currentPeriod = Eb_4; break;
-        case '.': currentPeriod = D_4;  break;
-        case 'l': currentPeriod = Db_4; break;
-        case ',': currentPeriod = C_4;  break; // C4
-        case 'm': currentPeriod = B_3;  break;
-        case 'j': currentPeriod = Bb_3; break;
-        case 'n': currentPeriod = A_3;  break;
+        case '>':
+        case '<':
+          if (incomingByte == '>') playCurrentNote = true;
+          if (incomingByte == '<') playCurrentNote = false;
+          specialByte = Serial.read();
+          switch (specialByte) {
+            case 'p': currentPeriod = E_5;   break;
+            case '0': currentPeriod = Eb_5;  break;
+            case 'o': currentPeriod = D_5;   break;
+            case '9': currentPeriod = Db_5;  break;
+            case 'i': currentPeriod = C_5;   break;
+            case 'u': currentPeriod = B_4;   break; // right values v
+            case '7': currentPeriod = Bb_4;  break;
+            case 'y': currentPeriod = A_4;   break;
+            case '6': currentPeriod = Ab_4;  break;
+            case 't': currentPeriod = G_4;   break;
+            case '5': currentPeriod = Gb_4;  break;
+            case 'r': currentPeriod = F_4;   break;
+            case 'e': currentPeriod = E_4;   break;
+            case '3': currentPeriod = Eb_4;  break;
+            case 'w': currentPeriod = D_4;   break;
+            case '2': currentPeriod = Db_4;  break;
+            case 'q': currentPeriod = C_4;   break; // C4
+            
+            case '-': currentPeriod = E_4;   break;
+            case '\'': currentPeriod = Eb_4; break;
+            case '.': currentPeriod = D_4;   break;
+            case 'l': currentPeriod = Db_4;  break;
+            case ',': currentPeriod = C_4;   break; // C4
+            case 'm': currentPeriod = B_3;   break;
+            case 'j': currentPeriod = Bb_3;  break;
+            case 'n': currentPeriod = A_3;   break; // right values ^
+            case 'h': currentPeriod = Ab_3;  break;
+            case 'b': currentPeriod = G_3;   break;
+            case 'g': currentPeriod = Gb_3;  break;
+            case 'v': currentPeriod = F_3;   break;
+            case 'c': currentPeriod = E_3;   break;
+            case 'd': currentPeriod = Eb_3;  break;
+            case 'x': currentPeriod = D_3;   break;
+            case 's': currentPeriod = Db_3;  break;
+            case 'z': currentPeriod = C_3;   break; // C3
+            
+            default: playCurrentNote = false; break;
+          }
         
         case '!':
           specialByte = Serial.read();
@@ -243,8 +296,6 @@ void loop() {
     }
   }
   
-  //Serial.println("no entiendo por que, no entiendo por que");
-  delayMicroseconds(CYCLE_PERIOD);
 }
 
 void printCurrentNote() {
