@@ -17,10 +17,10 @@ const int REST = 0;   // silence
 const int A_5  = 21;  // 880 Hz
 
 const int Ab_5 = 22;  // ? Hz
-const int G_5  = 23;  // ? Hz
-const int Gb_5 = 24;  // ? Hz
-const int F_5  = 26;  // ? Hz
-const int E_5  = 28;  // ? Hz
+const int G_5  = 24;  // ? Hz
+const int Gb_5 = 25;  // ? Hz
+const int F_5  = 27;  // ? Hz
+const int E_5  = 29;  // ? Hz
 const int Eb_5 = 30;  // ? Hz
 const int D_5  = 32;  // ? Hz
 const int Db_5 = 34;  // ? Hz
@@ -42,11 +42,11 @@ const int B_3  = 76;  // 247 Hz
 const int Bb_3 = 80;  // 233 Hz
 const int A_3  = 84;  // 220 Hz
 
-const int Ab_3 = 88;  // ? Hz
-const int G_3  = 92;  // ? Hz
-const int Gb_3 = 96;  // ? Hz
-const int F_3  = 104;  // ? Hz
-const int E_3  = 112;  // ? Hz
+const int Ab_3 = 90;  // ? Hz
+const int G_3  = 96;  // ? Hz
+const int Gb_3 = 102;  // ? Hz
+const int F_3  = 108;  // ? Hz
+const int E_3  = 114;  // ? Hz
 const int Eb_3 = 120;  // ? Hz
 const int D_3  = 128;  // ? Hz
 const int Db_3 = 136;  // ? Hz
@@ -60,17 +60,22 @@ const int END = 1000;  // loop
 const bool INITIAL_PLAY_NOTES = false;
 bool playNotes = INITIAL_PLAY_NOTES;
 const int NOTE_LIST[] = {
+  A_4, A_4, A_4, A_4, A_3, A_3, A_3, A_3, REST,
+  REST, REST, END
+};
+
+/*const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
   D_4, REST, E_4, C_4, D_4, F_4, E_4, C_4, D_4, F_4, E_4, C_4, D_4, E_4, G_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
-  REST, END
-};
+  REST, REST, END
+};*/
 unsigned int noteListIndex = 0;
 
-const unsigned int CYCLE_PERIOD = 41; // microseconds
-const unsigned int NOTE_DURATION_MS = 100; // ms
-const unsigned int NOTE_CHANGE_THRESHOLD = NOTE_DURATION_MS * 1000UL / CYCLE_PERIOD; //300ms
+const unsigned int CYCLE_PERIOD = 27; // microseconds
+const unsigned int NOTE_DURATION_MS = 250; // ms
+const unsigned long NOTE_CHANGE_THRESHOLD = NOTE_DURATION_MS * 1000UL / CYCLE_PERIOD;
 
 volatile unsigned int currentPosition = 0;
 volatile bool currentDirection = false;
@@ -79,8 +84,8 @@ volatile unsigned int tick = 0;
 volatile unsigned int currentPeriod = 0;
 bool playCurrentNote = false;
 
-unsigned int noteChangeCounter = 0;
-unsigned int noteSilenceCounter = 0;
+volatile unsigned long noteChangeCounter = 0;
+//unsigned long noteSilenceCounter = 0;
 unsigned int nextNote = 0;
 
 byte incomingByte = 0;
@@ -140,7 +145,7 @@ void setup() {
 }
 
 void noteSetter() {
-  if (!playNotes && playCurrentNote) {
+  if (playCurrentNote) {
     // move motor every n ticks
     tick++;
     if (tick == currentPeriod) {
@@ -156,16 +161,15 @@ void noteSetter() {
       currentPosition = 0;
     }
   }
+  noteChangeCounter++;
 }
 
 void loop() {
   
-  // every 40ms, change note
+  // every NOTE_CHANGE_THRESHOLD ms, change note
   if (playNotes) {
-    noteChangeCounter++;
-    if (noteChangeCounter == NOTE_CHANGE_THRESHOLD * 2) {
-      digitalWrite(PIN_LED, (digitalRead(PIN_LED) == LOW) ? HIGH : LOW);
-      noteChangeCounter = 0;
+    if (noteChangeCounter == NOTE_CHANGE_THRESHOLD) {
+      playCurrentNote = true;
 
       currentPeriod = NOTE_LIST[noteListIndex];
       noteListIndex++;
@@ -175,22 +179,24 @@ void loop() {
         noteListIndex++;
       }
       tick = 0;
-      noteSilenceCounter = 0;
       
       printCurrentNote();
     }
   
-    // if a note is playing, every NOTE_CHANGE_THRESHOLD_MS ms, silence note
-    if (currentPeriod > 0) {
-      noteSilenceCounter++;
-      if (noteSilenceCounter == NOTE_CHANGE_THRESHOLD) {
-        noteSilenceCounter = 0;
-        currentPeriod = 0;
-        tick = 0;
-        if (USE_SERIAL) {
-          Serial.println("rest");
-        }
+    // if a note is playing, every NOTE_CHANGE_THRESHOLD ms, silence note
+    if (noteChangeCounter == NOTE_CHANGE_THRESHOLD * 2) {
+      noteChangeCounter = 0;
+      playCurrentNote = false;
+      digitalWrite(PIN_LED, LOW);
+      currentPeriod = 0;
+      tick = 0;
+      if (USE_SERIAL) {
+        Serial.println("rest");
       }
+    }
+    
+    if (playCurrentNote && currentPeriod > 0) {
+      digitalWrite(PIN_LED, HIGH);
     }
   }
 
@@ -243,7 +249,8 @@ void loop() {
             
             default: playCurrentNote = false; break;
           }
-        
+          digitalWrite(PIN_LED, playCurrentNote);
+          break;
         case '!':
           specialByte = Serial.read();
           switch (specialByte) {
@@ -291,7 +298,7 @@ void loop() {
           break;
       }
       tick = 0;
-      noteSilenceCounter = 0;
+      //noteSilenceCounter = 0;
       printCurrentNote();
     }
   }

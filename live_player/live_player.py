@@ -116,7 +116,7 @@ class Game():
                 if (e.key < 256): char = chr(e.key)
                 self.show_error_message = True
                 self.error_message["error"] = Message(char)
-                # especiales
+                # special functions
                 if e.key == K_F1:
                     self.ser.write("!f")
                     self.error_message["error"] = Message("MOTOR FORWARD")
@@ -129,6 +129,9 @@ class Game():
                 elif e.key == K_F4:
                     self.ser.write("!m160")
                     self.error_message["error"] = Message("MAXIMUM MOVEMENT")
+                elif e.key == K_F5:
+                    self.ser.write("!p")
+                    self.error_message["error"] = Message("PLAY / PAUSE")
                 else:
                     self.ser.write(">" + char)
             elif e.type == KEYUP:
