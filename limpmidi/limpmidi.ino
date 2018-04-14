@@ -57,24 +57,25 @@ const int Bb_2 = 160;  // ? Hz
 const int A_2  = 168; // 110 Hz
 const int END = 1000;  // loop
 
-const bool INITIAL_PLAY_NOTES = false;
+const bool INITIAL_PLAY_NOTES = true;
 bool playNotes = INITIAL_PLAY_NOTES;
+/*
 const int NOTE_LIST[] = {
   A_4, A_4, A_4, A_4, A_3, A_3, A_3, A_3, REST,
   REST, REST, END
 };
-
-/*const int NOTE_LIST[] = {
+*/
+const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
   D_4, REST, E_4, C_4, D_4, F_4, E_4, C_4, D_4, F_4, E_4, C_4, D_4, E_4, G_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
   REST, REST, END
-};*/
+};
 unsigned int noteListIndex = 0;
 
 const unsigned int CYCLE_PERIOD = 27; // microseconds
-const unsigned int NOTE_DURATION_MS = 250; // ms
+const unsigned int NOTE_DURATION_MS = 180; // ms
 const unsigned long NOTE_CHANGE_THRESHOLD = NOTE_DURATION_MS * 1000UL / CYCLE_PERIOD;
 
 volatile unsigned int currentPosition = 0;
@@ -168,36 +169,39 @@ void loop() {
   
   // every NOTE_CHANGE_THRESHOLD ms, change note
   if (playNotes) {
-    if (noteChangeCounter == NOTE_CHANGE_THRESHOLD) {
+    if (!playCurrentNote && noteChangeCounter == NOTE_CHANGE_THRESHOLD) {
+      digitalWrite(PIN_LED, HIGH);
+      
       playCurrentNote = true;
 
       currentPeriod = NOTE_LIST[noteListIndex];
+      tick = 0;
+      
       noteListIndex++;
       if (currentPeriod == END) {
         noteListIndex = 0;
         currentPeriod = NOTE_LIST[noteListIndex];
         noteListIndex++;
       }
-      tick = 0;
       
       printCurrentNote();
     }
   
     // if a note is playing, every NOTE_CHANGE_THRESHOLD ms, silence note
-    if (noteChangeCounter == NOTE_CHANGE_THRESHOLD * 2) {
-      noteChangeCounter = 0;
-      playCurrentNote = false;
+    if (playCurrentNote && noteChangeCounter >= NOTE_CHANGE_THRESHOLD * 2) {
       digitalWrite(PIN_LED, LOW);
+      
+      playCurrentNote = false;
       currentPeriod = 0;
       tick = 0;
+      
+      noteChangeCounter = 0;
+      
       if (USE_SERIAL) {
-        Serial.println("rest");
+        Serial.println("stop");
       }
     }
     
-    if (playCurrentNote && currentPeriod > 0) {
-      digitalWrite(PIN_LED, HIGH);
-    }
   }
 
   if (USE_SERIAL) {
@@ -308,6 +312,16 @@ void loop() {
 void printCurrentNote() {
   if (USE_SERIAL) {
     switch (currentPeriod) {
+      case A_5:  Serial.println("A5");  break;
+      case Ab_5: Serial.println("Ab5"); break;
+      case G_5:  Serial.println("G5");  break;
+      case Gb_5: Serial.println("Gb5"); break;
+      case F_5:  Serial.println("F5");  break;
+      case E_5:  Serial.println("E5");  break;
+      case Eb_5: Serial.println("Eb5"); break;
+      case D_5:  Serial.println("D5");  break;
+      case Db_5: Serial.println("Db5"); break;
+      case C_5:  Serial.println("C5");  break;
       case B_4:  Serial.println("B4");  break;
       case Bb_4: Serial.println("Bb4"); break;
       case A_4:  Serial.println("A4");  break;
@@ -323,6 +337,21 @@ void printCurrentNote() {
       case B_3:  Serial.println("B3");  break;
       case Bb_3: Serial.println("Bb3"); break;
       case A_3:  Serial.println("A3");  break;
+      case Ab_3: Serial.println("Ab3"); break;
+      case G_3:  Serial.println("G3");  break;
+      case Gb_3: Serial.println("Gb3"); break;
+      case F_3:  Serial.println("F3");  break;
+      case E_3:  Serial.println("E3");  break;
+      case Eb_3: Serial.println("Eb3"); break;
+      case D_3:  Serial.println("D3");  break;
+      case Db_3: Serial.println("Db3"); break;
+      case C_3:  Serial.println("C3");  break;
+      case B_2:  Serial.println("B2");  break;
+      case Bb_2: Serial.println("Bb2"); break;
+      case A_2:  Serial.println("A2");  break;
+      
+      // special case
+      case REST: Serial.println("REST");break;
     }    
   }
 }
