@@ -276,8 +276,9 @@ void loop() {
               digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_BACKWARDS);
               for (int i = 0; i < 20; i++) {
                 digitalWrite(PIN_CONTROL_STEP, HIGH);
+                delay(5);
                 digitalWrite(PIN_CONTROL_STEP, LOW);
-                delay(10);
+                delay(5);
               }
               Serial.println("move motor backwards");
               break;
@@ -285,8 +286,9 @@ void loop() {
               digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
               for (int i = 0; i < 20; i++) {
                 digitalWrite(PIN_CONTROL_STEP, HIGH);
+                delay(5);
                 digitalWrite(PIN_CONTROL_STEP, LOW);
-                delay(10);
+                delay(5);
               }
               Serial.println("move motor forwards");
               break;
