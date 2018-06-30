@@ -4,8 +4,9 @@ const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
 
 const int PIN_LED = 13;
-const int PIN_CONTROL_STEP = 10; // rojo
-const int PIN_CONTROL_DIRECTION = 9; // azul
+const int PIN_CONTROL_STEP = 1; // rojo
+const int PIN_CONTROL_DIRECTION = 0; // azul
+const int NUMBER_OF_FLOPPIES = 7;
 const int MAX_POSITION = 80; // fd has 80 tracks
 const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 2; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
@@ -63,8 +64,8 @@ bool autoPlay = INITIAL_AUTO_PLAY;
 /*
 const int NOTE_LIST[] = {
   A_3, END
-};
-*/
+};*/
+
 const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
@@ -111,37 +112,43 @@ void setup() {
     Serial.setTimeout(10); // parseInt uses this timeout
   }
   
-  randomSeed(analogRead(0)); // init random seed
+  //randomSeed(analogRead(0)); // init random seed
   
   pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_CONTROL_STEP, OUTPUT);
-  pinMode(PIN_CONTROL_DIRECTION, OUTPUT);
+  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+    pinMode(PIN_CONTROL_STEP + f * 2, OUTPUT);
+    pinMode(PIN_CONTROL_DIRECTION + f * 2, OUTPUT);
+  }
   
-  delay(1000);
+  //delay(1000);
   digitalWrite(PIN_LED, HIGH);
   
   // reset position: set direction to backwards until the 0 position 
   // is reached
-  digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_BACKWARDS);
-  for (int i = 0; i < MAX_POSITION; i++) {
-    digitalWrite(PIN_CONTROL_STEP, HIGH);
-    delay(5);
-    digitalWrite(PIN_CONTROL_STEP, LOW);
-    delay(5);
+  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+    digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_BACKWARDS);
+    for (int i = 0; i < MAX_POSITION; i++) {
+      digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
+      delay(5);
+      digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
+      delay(5);
+    }
   }
   // set direction to forwards until the max position, and a bit beyond
-  digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
-  for (int i = 0; i < MAX_POSITION + 2; i++) {
-   digitalWrite(PIN_CONTROL_STEP, HIGH);
-   delay(5);
-   digitalWrite(PIN_CONTROL_STEP, LOW);
-   delay(5);
+  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+    digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_FORWARDS);
+    for (int i = 0; i < MAX_POSITION + 2; i++) {
+     digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
+     delay(5);
+     digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
+     delay(5);
+    }
   }
   digitalWrite(PIN_LED, LOW);
 
   currentPeriod = 0;
   
-  delay(2000);
+  //delay(2000);
   
   Timer1.initialize(CYCLE_PERIOD);
   Timer1.attachInterrupt(noteSetter);
@@ -154,8 +161,10 @@ void noteSetter() {
     // move motor every n ticks
     tick++;
     if (tick == currentPeriod) {
-      digitalWrite(PIN_CONTROL_STEP, currentStep);
-      digitalWrite(PIN_CONTROL_DIRECTION, currentDirection);
+      for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+        digitalWrite(PIN_CONTROL_STEP + f * 2, currentStep);
+        digitalWrite(PIN_CONTROL_DIRECTION + f * 2, currentDirection);
+      }
       currentStep = !currentStep;
       currentPosition++;
       tick = 0;
@@ -273,22 +282,26 @@ void loop() {
           specialByte = Serial.read();
           switch (specialByte) {
             case 'b': // move motor backwards 20 steps
-              digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_BACKWARDS);
-              for (int i = 0; i < 20; i++) {
-                digitalWrite(PIN_CONTROL_STEP, HIGH);
-                delay(5);
-                digitalWrite(PIN_CONTROL_STEP, LOW);
-                delay(5);
+              for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+                digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_BACKWARDS);
+                for (int i = 0; i < 20; i++) {
+                  digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
+                  delay(5);
+                  digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
+                  delay(5);
+                }
               }
               Serial.println("move motor backwards");
               break;
             case 'f': // move motor forwards
-              digitalWrite(PIN_CONTROL_DIRECTION, DIRECTION_FORWARDS);
-              for (int i = 0; i < 20; i++) {
-                digitalWrite(PIN_CONTROL_STEP, HIGH);
-                delay(5);
-                digitalWrite(PIN_CONTROL_STEP, LOW);
-                delay(5);
+              for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+                digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_FORWARDS);
+                for (int i = 0; i < 20; i++) {
+                  digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
+                  delay(5);
+                  digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
+                  delay(5);
+                }
               }
               Serial.println("move motor forwards");
               break;
