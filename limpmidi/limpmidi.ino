@@ -61,11 +61,9 @@ const int END = 1000;  // loop
 const bool INITIAL_AUTO_PLAY = true;
 bool autoPlay = INITIAL_AUTO_PLAY;
 
-/*
-const int NOTE_LIST[] = {
+/*const int NOTE_LIST[] = {
   A_3, END
 };*/
-
 /*const int NOTE_LIST[] = {
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, E_4, REST, D_4, REST,
   E_4, E_4, F_4, G_4, G_4, F_4, E_4, D_4, C_4, C_4, D_4, E_4, D_4, REST, C_4, REST,
@@ -79,7 +77,6 @@ const int NOTE_LIST[] = {
   D_3, F_3, Bb_3, F_3, D_3, F_3, Bb_3, F_3,
   END
 };
-
 unsigned int noteListIndex = 0;
 
 const unsigned int CYCLE_PERIOD = 27; // microseconds
@@ -88,32 +85,20 @@ const unsigned long INITIAL_NOTE_CHANGE_THRESHOLD = INITIAL_NOTE_DURATION_MS * 1
 unsigned int noteDurationMs = INITIAL_NOTE_DURATION_MS;
 unsigned long noteChangeThreshold = INITIAL_NOTE_CHANGE_THRESHOLD;
 
-/*
-volatile unsigned int currentPosition = 0;
-volatile bool currentDirection = false;
-volatile bool currentStep = false;
-volatile unsigned int tick = 0;
-volatile unsigned int currentPeriod = 0;
-bool playCurrentNote = false;
-bool autoPlayingNote = false;
-
-volatile unsigned long noteChangeCounter = 0;
-unsigned int nextNote = 0;
-*/
 volatile unsigned int currentPosition[NUMBER_OF_FLOPPIES] = {0};
 volatile bool currentDirection[NUMBER_OF_FLOPPIES] = {0};
 volatile bool currentStep[NUMBER_OF_FLOPPIES] = {0};
 volatile unsigned int tick[NUMBER_OF_FLOPPIES] = {0};
 volatile unsigned int currentPeriod[NUMBER_OF_FLOPPIES] = {0};
-bool playCurrentNote[NUMBER_OF_FLOPPIES] = {0};
-bool autoPlayingNote[NUMBER_OF_FLOPPIES] = {0};
+volatile bool playCurrentNote[NUMBER_OF_FLOPPIES] = {0};
+bool autoPlayingNote = 0;
 
 volatile unsigned long noteChangeCounter[NUMBER_OF_FLOPPIES] = {0};
 unsigned int nextNote[NUMBER_OF_FLOPPIES] = {0};
 
-int manualPlayFloppy = 1;
-int autoPlayFloppy = 0;
-
+const int AUTO_PLAY_FLOPPY = 0;
+const int FIRST_MANUAL_PLAY_FLOPPY = 1;
+int currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
 
 byte incomingByte = 0;
 byte specialByte = 0;
@@ -206,19 +191,19 @@ void loop() {
   
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
-    if (!autoPlayingNote[autoPlayFloppy] && noteChangeCounter[autoPlayFloppy] >= noteChangeThreshold) {
+    if (!autoPlayingNote && noteChangeCounter[AUTO_PLAY_FLOPPY] >= noteChangeThreshold) {
       digitalWrite(PIN_LED, HIGH);
       
-      autoPlayingNote[autoPlayFloppy] = true;
-      playCurrentNote[autoPlayFloppy] = true;
+      autoPlayingNote = true;
+      playCurrentNote[AUTO_PLAY_FLOPPY] = true;
 
-      currentPeriod[autoPlayFloppy] = NOTE_LIST[noteListIndex];
-      tick[autoPlayFloppy] = 0;
+      currentPeriod[AUTO_PLAY_FLOPPY] = NOTE_LIST[noteListIndex];
+      tick[AUTO_PLAY_FLOPPY] = 0;
       
       noteListIndex++;
       if (NOTE_LIST[noteListIndex - 1] == END) {
         noteListIndex = 0;
-        currentPeriod[autoPlayFloppy] = NOTE_LIST[noteListIndex];
+        currentPeriod[AUTO_PLAY_FLOPPY] = NOTE_LIST[noteListIndex];
         noteListIndex++;
       }
       
@@ -226,15 +211,15 @@ void loop() {
     }
   
     // if a note is playing, every noteChangeThreshold ms, silence note
-    if (autoPlayingNote[autoPlayFloppy] && noteChangeCounter[autoPlayFloppy] >= noteChangeThreshold * 2) {
+    if (autoPlayingNote && noteChangeCounter[AUTO_PLAY_FLOPPY] >= noteChangeThreshold * 2) {
       digitalWrite(PIN_LED, LOW);
       
-      autoPlayingNote[autoPlayFloppy] = false;
-      playCurrentNote[autoPlayFloppy] = false;
-      currentPeriod[autoPlayFloppy] = 0;
-      tick[autoPlayFloppy] = 0;
+      autoPlayingNote = false;
+      playCurrentNote[AUTO_PLAY_FLOPPY] = false;
+      currentPeriod[AUTO_PLAY_FLOPPY] = 0;
+      tick[AUTO_PLAY_FLOPPY] = 0;
       
-      noteChangeCounter[autoPlayFloppy] = 0;
+      noteChangeCounter[AUTO_PLAY_FLOPPY] = 0;
       
       if (USE_SERIAL) {
         Serial.println("stop");
@@ -288,19 +273,26 @@ void loop() {
             case 's': nextPeriod = Db_3;  break;
             case 'z': nextPeriod = C_3;   break; // C3
             
-            default: playCurrentNote[manualPlayFloppy] = false; break;
+            //default: playCurrentNote[MANUAL_PLAY_FLOPPY] = false; break;
           }
           if (incomingByte == '>' && nextPeriod != REST) {
-            playCurrentNote[manualPlayFloppy] = true;
-            currentPeriod[manualPlayFloppy] = nextPeriod;
-            tick[manualPlayFloppy] = 0;
+            playCurrentNote[currentFloppy] = true;
+            currentPeriod[currentFloppy] = nextPeriod;
+            tick[currentFloppy] = 0;
             printCurrentNote();
+            digitalWrite(PIN_LED, HIGH);
+            
+            currentFloppy++;
+            if (currentFloppy == NUMBER_OF_FLOPPIES) currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
           }
-          if (incomingByte == '<' && nextPeriod == currentPeriod[manualPlayFloppy]) {
-              playCurrentNote[manualPlayFloppy] = false;
+          for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+            if (incomingByte == '<' && nextPeriod == currentPeriod[f]) {
+                playCurrentNote[f] = false;
+                digitalWrite(PIN_LED, LOW);
+                break;
+            }
           }
           nextPeriod = REST;
-          digitalWrite(PIN_LED, playCurrentNote[manualPlayFloppy]);
           break;
         case '!':
           specialByte = Serial.read();
@@ -344,18 +336,18 @@ void loop() {
               if (autoPlay) {
                 Serial.println("pause");
                 autoPlay = false;
-                playCurrentNote[autoPlayFloppy] = false;
+                playCurrentNote[AUTO_PLAY_FLOPPY] = false;
               } else {
                 Serial.println("play");
                 autoPlay = true;
-                autoPlayingNote[autoPlayFloppy] = false;
-                noteChangeCounter[autoPlayFloppy] = 0;
+                autoPlayingNote = false;
+                noteChangeCounter[AUTO_PLAY_FLOPPY] = 0;
               }
               break;
             case 's': // stop
               Serial.println("stop");
               autoPlay = false;
-              playCurrentNote[autoPlayFloppy] = false;
+              playCurrentNote[AUTO_PLAY_FLOPPY] = false;
               noteListIndex = 0;
               break;
             case '+': // faster playing
@@ -386,7 +378,7 @@ void loop() {
 
 void printCurrentNote() {
   if (USE_SERIAL) {
-    switch (currentPeriod[manualPlayFloppy]) {
+    switch (currentPeriod[currentFloppy]) {
       case A_5:  Serial.println("A5");  break;
       case Ab_5: Serial.println("Ab5"); break;
       case G_5:  Serial.println("G5");  break;
