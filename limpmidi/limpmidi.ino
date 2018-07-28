@@ -6,7 +6,7 @@ const long int SERIAL_BPS = 115200;
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 1; // rojo
 const int PIN_CONTROL_DIRECTION = 0; // azul
-const int NUMBER_OF_FLOPPIES = 2;
+const int NUMBER_OF_FLOPPIES = 4;
 const int MAX_POSITION = 80; // fd has 80 tracks
 const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 2; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
@@ -58,7 +58,7 @@ const int Bb_2 = 160;  // ? Hz
 const int A_2  = 168; // 110 Hz
 const int END = 1000;  // loop
 
-const bool INITIAL_AUTO_PLAY = true;
+const bool INITIAL_AUTO_PLAY = false;
 bool autoPlay = INITIAL_AUTO_PLAY;
 
 /*const int NOTE_LIST[] = {
@@ -97,13 +97,15 @@ volatile unsigned long noteChangeCounter[NUMBER_OF_FLOPPIES] = {0};
 unsigned int nextNote[NUMBER_OF_FLOPPIES] = {0};
 
 const int AUTO_PLAY_FLOPPY = 0;
-const int FIRST_MANUAL_PLAY_FLOPPY = 1;
+const int FIRST_MANUAL_PLAY_FLOPPY = 0;
 int currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
 
 byte incomingByte = 0;
 byte specialByte = 0;
 unsigned int incomingInt = 0;
 unsigned int nextPeriod = 0;
+int initialFloppy = 0;
+bool availableFloppyFound = false;
 
 char debug_string_buffer[20];
 // sprintf + serial of 20 bytes takes ~200us
@@ -188,7 +190,7 @@ void noteSetter() {
 }
 
 void loop() {
-  
+
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
     if (!autoPlayingNote && noteChangeCounter[AUTO_PLAY_FLOPPY] >= noteChangeThreshold) {
@@ -241,8 +243,8 @@ void loop() {
             case '0': nextPeriod = Eb_5;  break;
             case 'o': nextPeriod = D_5;   break;
             case '9': nextPeriod = Db_5;  break;
-            case 'i': nextPeriod = C_5;   break;
-            case 'u': nextPeriod = B_4;   break; // right values v
+            case 'i': nextPeriod = C_5;   break; // C5
+            case 'u': nextPeriod = B_4;   break;
             case '7': nextPeriod = Bb_4;  break;
             case 'y': nextPeriod = A_4;   break;
             case '6': nextPeriod = Ab_4;  break;
@@ -256,13 +258,13 @@ void loop() {
             case 'q': nextPeriod = C_4;   break; // C4
             
             case '-': nextPeriod = E_4;   break;
-            case '\'': nextPeriod = Eb_4; break;
+            case '\'': nextPeriod = Eb_4;  break;
             case '.': nextPeriod = D_4;   break;
             case 'l': nextPeriod = Db_4;  break;
             case ',': nextPeriod = C_4;   break; // C4
             case 'm': nextPeriod = B_3;   break;
             case 'j': nextPeriod = Bb_3;  break;
-            case 'n': nextPeriod = A_3;   break; // right values ^
+            case 'n': nextPeriod = A_3;   break;
             case 'h': nextPeriod = Ab_3;  break;
             case 'b': nextPeriod = G_3;   break;
             case 'g': nextPeriod = Gb_3;  break;
@@ -276,20 +278,38 @@ void loop() {
             //default: playCurrentNote[MANUAL_PLAY_FLOPPY] = false; break;
           }
           if (incomingByte == '>' && nextPeriod != REST) {
-            playCurrentNote[currentFloppy] = true;
-            currentPeriod[currentFloppy] = nextPeriod;
-            tick[currentFloppy] = 0;
-            printCurrentNote();
-            digitalWrite(PIN_LED, HIGH);
+            // find first available floppy
+            initialFloppy = currentFloppy;
+            availableFloppyFound = false;
             
-            currentFloppy++;
-            if (currentFloppy == NUMBER_OF_FLOPPIES) currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
+            while (true) {
+              currentFloppy++;
+              if (currentFloppy == NUMBER_OF_FLOPPIES) currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
+              
+              if (playCurrentNote[currentFloppy] == false) {
+                availableFloppyFound = true;
+                break;
+              }
+              
+              // after cycling through all floppies, exit
+              if (initialFloppy == currentFloppy) break;
+            }
+            if (availableFloppyFound) {
+              // after floppy is found, play note in that floppy
+              playCurrentNote[currentFloppy] = true;
+              currentPeriod[currentFloppy] = nextPeriod;
+              tick[currentFloppy] = 0;
+              printCurrentNote();
+              digitalWrite(PIN_LED, HIGH);
+            }
           }
-          for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
-            if (incomingByte == '<' && nextPeriod == currentPeriod[f]) {
+          if (incomingByte == '<') {
+            for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              if (nextPeriod == currentPeriod[f] && playCurrentNote[f]) {
                 playCurrentNote[f] = false;
                 digitalWrite(PIN_LED, LOW);
                 break;
+              }
             }
           }
           nextPeriod = REST;
