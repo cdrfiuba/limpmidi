@@ -14,49 +14,50 @@ unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
 const int DIRECTION_BACKWARDS = HIGH;
 const int DIRECTION_FORWARDS = LOW;
 
-const int REST = 0;   // silence
-const int A_5  = 21;  // 880 Hz
+const unsigned int CYCLE_PERIOD = 31; // microseconds
 
-const int Ab_5 = 22;  // ? Hz
-const int G_5  = 24;  // ? Hz
-const int Gb_5 = 25;  // ? Hz
-const int F_5  = 27;  // ? Hz
-const int E_5  = 29;  // ? Hz
-const int Eb_5 = 30;  // ? Hz
-const int D_5  = 32;  // ? Hz
-const int Db_5 = 34;  // ? Hz
-const int C_5  = 36;  // ? Hz
+const unsigned char REST = 0;   // silence
 
-const int B_4  = 38;  // 494 Hz
-const int Bb_4 = 40;  // 466 Hz
-const int A_4  = 42;  // 440 Hz
-const int Ab_4 = 45;  // 415 Hz
-const int G_4  = 48;  // 392 Hz
-const int Gb_4 = 51;  // 370 Hz
-const int F_4  = 54;  // 349 Hz
-const int E_4  = 57;  // 329 Hz
-const int Eb_4 = 60;  // 311 Hz
-const int D_4  = 64;  // 294 Hz
-const int Db_4 = 68;  // 277 Hz
-const int C_4  = 72;  // 262 Hz
-const int B_3  = 76;  // 247 Hz
-const int Bb_3 = 80;  // 233 Hz
-const int A_3  = 84;  // 220 Hz
+const unsigned char B_4  = 33;  // 493.8833 Hz
+const unsigned char Bb_4 = 35;  // 466.1638 Hz
+const unsigned char A_4  = 37;  // 440.0000 Hz
+const unsigned char Ab_4 = 39;  // 415.3047 Hz
+const unsigned char G_4  = 41;  // 391.9954 Hz
+const unsigned char Gb_4 = 44;  // 369.9944 Hz
+const unsigned char F_4  = 46;  // 349.2282 Hz
+const unsigned char E_4  = 49;  // 329.6276 Hz
+const unsigned char Eb_4 = 52;  // 311.1270 Hz
+const unsigned char D_4  = 55;  // 293.6648 Hz
+const unsigned char Db_4 = 58;  // 277.1826 Hz
+const unsigned char C_4  = 62;  // 261.6256 Hz
 
-const int Ab_3 = 90;  // ? Hz
-const int G_3  = 96;  // ? Hz
-const int Gb_3 = 102;  // ? Hz
-const int F_3  = 108;  // ? Hz
-const int E_3  = 114;  // ? Hz
-const int Eb_3 = 120;  // ? Hz
-const int D_3  = 128;  // ? Hz
-const int Db_3 = 136;  // ? Hz
-const int C_3  = 144;  // ? Hz
-const int B_2  = 152;  // ? Hz
-const int Bb_2 = 160;  // ? Hz
+const unsigned char B_3  = B_4 * 2;
+const unsigned char Bb_3 = Bb_4 * 2;
+const unsigned char A_3  = A_4 * 2;
+const unsigned char Ab_3 = Ab_4 * 2;
+const unsigned char G_3  = G_4 * 2;
+const unsigned char Gb_3 = Gb_4 * 2;
+const unsigned char F_3  = F_4 * 2;
+const unsigned char E_3  = E_4 * 2;
+const unsigned char Eb_3 = Eb_4 * 2;
+const unsigned char D_3  = D_4 * 2;
+const unsigned char Db_3 = Db_4 * 2;
+const unsigned char C_3  = C_4 * 2;
 
-const int A_2  = 168; // 110 Hz
-const int END = 1000;  // loop
+const unsigned char B_2  = B_3 * 2;
+const unsigned char Bb_2 = Bb_3 * 2;
+const unsigned char A_2  = A_3 * 2;
+const unsigned char Ab_2 = Ab_3 * 2;
+const unsigned char G_2  = G_3 * 2;
+const unsigned char Gb_2 = Gb_3 * 2;
+const unsigned char F_2  = F_3 * 2;
+const unsigned char E_2  = E_3 * 2;
+const unsigned char Eb_2 = Eb_3 * 2;
+const unsigned char D_2  = D_3 * 2;
+const unsigned char Db_2 = Db_3 * 2;
+const unsigned char C_2  = C_3 * 2;
+
+const unsigned char END = 255;  // loop
 
 const bool INITIAL_AUTO_PLAY = false;
 bool autoPlay = INITIAL_AUTO_PLAY;
@@ -79,22 +80,20 @@ const int NOTE_LIST[] = {
 };
 unsigned int noteListIndex = 0;
 
-const unsigned int CYCLE_PERIOD = 27; // microseconds
 const unsigned int INITIAL_NOTE_DURATION_MS = 170; // ms
 const unsigned long INITIAL_NOTE_CHANGE_THRESHOLD = INITIAL_NOTE_DURATION_MS * 1000UL / CYCLE_PERIOD;
 unsigned int noteDurationMs = INITIAL_NOTE_DURATION_MS;
 unsigned long noteChangeThreshold = INITIAL_NOTE_CHANGE_THRESHOLD;
 
-volatile unsigned int currentPosition[NUMBER_OF_FLOPPIES] = {0};
-volatile bool currentDirection[NUMBER_OF_FLOPPIES] = {0};
-volatile bool currentStep[NUMBER_OF_FLOPPIES] = {0};
-volatile unsigned int tick[NUMBER_OF_FLOPPIES] = {0};
-volatile unsigned int currentPeriod[NUMBER_OF_FLOPPIES] = {0};
-volatile bool playCurrentNote[NUMBER_OF_FLOPPIES] = {0};
-bool autoPlayingNote = 0;
+volatile bool playCurrentNote[NUMBER_OF_FLOPPIES] = {};
+volatile bool currentDirection[NUMBER_OF_FLOPPIES] = {};
+volatile bool currentStep[NUMBER_OF_FLOPPIES] = {};
+volatile unsigned char currentPosition[NUMBER_OF_FLOPPIES] = {};
+volatile unsigned char currentPeriod[NUMBER_OF_FLOPPIES] = {};
+volatile unsigned char tick[NUMBER_OF_FLOPPIES] = {};
+volatile unsigned long noteChangeCounter = 0;
 
-volatile unsigned long noteChangeCounter[NUMBER_OF_FLOPPIES] = {0};
-unsigned int nextNote[NUMBER_OF_FLOPPIES] = {0};
+bool autoPlayingNote = 0;
 
 const int AUTO_PLAY_FLOPPY = 0;
 const int FIRST_MANUAL_PLAY_FLOPPY = 0;
@@ -155,8 +154,14 @@ void setup() {
   }
   digitalWrite(PIN_LED, LOW);
 
+  // array inits
   for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+    playCurrentNote[f] = 0;
+    currentDirection[f] = 0;
+    currentStep[f] = 0;
+    currentPosition[f] = 0;
     currentPeriod[f] = 0;
+    tick[f] = 0;
   }
   
   //delay(2000);
@@ -185,7 +190,9 @@ void noteSetter() {
         currentPosition[f] = 0;
       }
     }
-    noteChangeCounter[f]++;
+  }
+  if (autoPlay) {
+    noteChangeCounter++;
   }
 }
 
@@ -193,7 +200,7 @@ void loop() {
 
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
-    if (!autoPlayingNote && noteChangeCounter[AUTO_PLAY_FLOPPY] >= noteChangeThreshold) {
+    if (!autoPlayingNote && noteChangeCounter >= noteChangeThreshold) {
       digitalWrite(PIN_LED, HIGH);
       
       autoPlayingNote = true;
@@ -213,7 +220,7 @@ void loop() {
     }
   
     // if a note is playing, every noteChangeThreshold ms, silence note
-    if (autoPlayingNote && noteChangeCounter[AUTO_PLAY_FLOPPY] >= noteChangeThreshold * 2) {
+    if (autoPlayingNote && noteChangeCounter >= noteChangeThreshold * 2) {
       digitalWrite(PIN_LED, LOW);
       
       autoPlayingNote = false;
@@ -221,7 +228,7 @@ void loop() {
       currentPeriod[AUTO_PLAY_FLOPPY] = 0;
       tick[AUTO_PLAY_FLOPPY] = 0;
       
-      noteChangeCounter[AUTO_PLAY_FLOPPY] = 0;
+      noteChangeCounter = 0;
       
       if (USE_SERIAL) {
         Serial.println("stop");
@@ -239,11 +246,6 @@ void loop() {
         case '<':
           specialByte = Serial.read();
           switch (specialByte) {
-            case 'p': nextPeriod = E_5;   break;
-            case '0': nextPeriod = Eb_5;  break;
-            case 'o': nextPeriod = D_5;   break;
-            case '9': nextPeriod = Db_5;  break;
-            case 'i': nextPeriod = C_5;   break; // C5
             case 'u': nextPeriod = B_4;   break;
             case '7': nextPeriod = Bb_4;  break;
             case 'y': nextPeriod = A_4;   break;
@@ -361,7 +363,7 @@ void loop() {
                 Serial.println("play");
                 autoPlay = true;
                 autoPlayingNote = false;
-                noteChangeCounter[AUTO_PLAY_FLOPPY] = 0;
+                noteChangeCounter = 0;
               }
               break;
             case 's': // stop
@@ -399,16 +401,6 @@ void loop() {
 void printCurrentNote() {
   if (USE_SERIAL) {
     switch (currentPeriod[currentFloppy]) {
-      case A_5:  Serial.println("A5");  break;
-      case Ab_5: Serial.println("Ab5"); break;
-      case G_5:  Serial.println("G5");  break;
-      case Gb_5: Serial.println("Gb5"); break;
-      case F_5:  Serial.println("F5");  break;
-      case E_5:  Serial.println("E5");  break;
-      case Eb_5: Serial.println("Eb5"); break;
-      case D_5:  Serial.println("D5");  break;
-      case Db_5: Serial.println("Db5"); break;
-      case C_5:  Serial.println("C5");  break;
       case B_4:  Serial.println("B4");  break;
       case Bb_4: Serial.println("Bb4"); break;
       case A_4:  Serial.println("A4");  break;
@@ -433,9 +425,6 @@ void printCurrentNote() {
       case D_3:  Serial.println("D3");  break;
       case Db_3: Serial.println("Db3"); break;
       case C_3:  Serial.println("C3");  break;
-      case B_2:  Serial.println("B2");  break;
-      case Bb_2: Serial.println("Bb2"); break;
-      case A_2:  Serial.println("A2");  break;
       
       // special case
       case REST: Serial.println("REST");break;
