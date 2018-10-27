@@ -6,7 +6,7 @@ const long int SERIAL_BPS = 115200;
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 1; // rojo
 const int PIN_CONTROL_DIRECTION = 0; // azul
-const int NUMBER_OF_FLOPPIES = 4;
+const unsigned char NUMBER_OF_FLOPPIES = 4;
 const int MAX_POSITION = 80; // fd has 80 tracks
 const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 2; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
@@ -95,15 +95,15 @@ volatile unsigned long noteChangeCounter = 0;
 
 bool autoPlayingNote = 0;
 
-const int AUTO_PLAY_FLOPPY = 0;
-const int FIRST_MANUAL_PLAY_FLOPPY = 0;
-int currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
+const unsigned char AUTO_PLAY_FLOPPY = 0;
+const unsigned char FIRST_MANUAL_PLAY_FLOPPY = 1;
+unsigned char currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
 
 byte incomingByte = 0;
 byte specialByte = 0;
 unsigned int incomingInt = 0;
-unsigned int nextPeriod = 0;
-int initialFloppy = 0;
+unsigned char nextPeriod = 0;
+unsigned char initialFloppy = 0;
 bool availableFloppyFound = false;
 
 char debug_string_buffer[20];
@@ -123,7 +123,7 @@ void setup() {
   //randomSeed(analogRead(0)); // init random seed
   
   pinMode(PIN_LED, OUTPUT);
-  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+  for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     pinMode(PIN_CONTROL_STEP + f * 2, OUTPUT);
     pinMode(PIN_CONTROL_DIRECTION + f * 2, OUTPUT);
   }
@@ -133,29 +133,29 @@ void setup() {
   
   // reset position: set direction to backwards until the 0 position 
   // is reached
-  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+  for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_BACKWARDS);
     for (int i = 0; i < MAX_POSITION; i++) {
       digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
-      delay(5);
+      delay(2);
       digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
-      delay(5);
+      delay(2);
     }
   }
   // set direction to forwards until the max position, and a bit beyond
-  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+  for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_FORWARDS);
     for (int i = 0; i < MAX_POSITION + 2; i++) {
      digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
-     delay(5);
+     delay(2);
      digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
-     delay(5);
+     delay(2);
     }
   }
   digitalWrite(PIN_LED, LOW);
 
   // array inits
-  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+  for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     playCurrentNote[f] = 0;
     currentDirection[f] = 0;
     currentStep[f] = 0;
@@ -173,7 +173,7 @@ void setup() {
 }
 
 void noteSetter() {
-  for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+  for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     if (playCurrentNote[f]) {
       // move motor every n ticks
       tick[f]++;
@@ -216,7 +216,7 @@ void loop() {
         noteListIndex++;
       }
       
-      printCurrentNote();
+      printCurrentNote(AUTO_PLAY_FLOPPY);
     }
   
     // if a note is playing, every noteChangeThreshold ms, silence note
@@ -301,13 +301,13 @@ void loop() {
               playCurrentNote[currentFloppy] = true;
               currentPeriod[currentFloppy] = nextPeriod;
               tick[currentFloppy] = 0;
-              printCurrentNote();
+              printCurrentNote(currentFloppy);
               digitalWrite(PIN_LED, HIGH);
             }
           }
           if (incomingByte == '<') {
-            for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
-              if (nextPeriod == currentPeriod[f] && playCurrentNote[f]) {
+            for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              if (f != AUTO_PLAY_FLOPPY && nextPeriod == currentPeriod[f] && playCurrentNote[f]) {
                 playCurrentNote[f] = false;
                 digitalWrite(PIN_LED, LOW);
                 break;
@@ -320,25 +320,25 @@ void loop() {
           specialByte = Serial.read();
           switch (specialByte) {
             case 'b': // move motor backwards 20 steps
-              for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
                 digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_BACKWARDS);
                 for (int i = 0; i < 20; i++) {
                   digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
-                  delay(5);
+                  delay(2);
                   digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
-                  delay(5);
+                  delay(2);
                 }
               }
               Serial.println("move motor backwards");
               break;
             case 'f': // move motor forwards
-              for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
                 digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_FORWARDS);
                 for (int i = 0; i < 20; i++) {
                   digitalWrite(PIN_CONTROL_STEP + f * 2, HIGH);
-                  delay(5);
+                  delay(2);
                   digitalWrite(PIN_CONTROL_STEP + f * 2, LOW);
-                  delay(5);
+                  delay(2);
                 }
               }
               Serial.println("move motor forwards");
@@ -349,7 +349,7 @@ void loop() {
                 maxMotorMovement = incomingInt;
                 Serial.print("maxMotorMovement: ");
                 Serial.println(maxMotorMovement);
-                for (int f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+                for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
                   currentPosition[f] = 0;
                 }
               }
@@ -371,6 +371,13 @@ void loop() {
               autoPlay = false;
               playCurrentNote[AUTO_PLAY_FLOPPY] = false;
               noteListIndex = 0;
+              break;
+            case 'r': // reset notes
+              Serial.println("reset");
+              for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+                playCurrentNote[f] = false;
+              }
+              digitalWrite(PIN_LED, LOW);
               break;
             case '+': // faster playing
               if (noteDurationMs - 10 > 0) {
@@ -398,9 +405,9 @@ void loop() {
   
 }
 
-void printCurrentNote() {
+void printCurrentNote(unsigned char floppy) {
   if (USE_SERIAL) {
-    switch (currentPeriod[currentFloppy]) {
+    switch (currentPeriod[floppy]) {
       case B_4:  Serial.println("B4");  break;
       case Bb_4: Serial.println("Bb4"); break;
       case A_4:  Serial.println("A4");  break;
