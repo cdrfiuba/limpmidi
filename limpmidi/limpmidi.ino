@@ -1,4 +1,7 @@
 #include <TimerOne.h>
+#include <MIDI.h>
+
+MIDI_CREATE_DEFAULT_INSTANCE();
 
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
@@ -170,6 +173,10 @@ void setup() {
   Timer1.attachInterrupt(noteSetter);
   Timer1.start();
 
+  MIDI.setHandleNoteOn(handleMIDINoteOn);
+  MIDI.setHandleNoteOff(handleMIDINoteOff);
+  MIDI.begin(MIDI_CHANNEL_OMNI);
+  
 }
 
 void noteSetter() {
@@ -196,8 +203,21 @@ void noteSetter() {
   }
 }
 
-void loop() {
+void handleMIDINoteOn(byte inChannel, byte inNote, byte inVelocity) {
+  inChannel = inChannel; inVelocity = inVelocity;
+  Serial.print("On ");
+  Serial.println(inNote);
+}
+void handleMIDINoteOff(byte inChannel, byte inNote, byte inVelocity) {
+  inChannel = inChannel; inVelocity = inVelocity;
+  Serial.print("Off ");
+  Serial.println(inNote);
+}
 
+void loop() {
+  
+  MIDI.read();
+  
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
     if (!autoPlayingNote && noteChangeCounter >= noteChangeThreshold) {
