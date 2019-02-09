@@ -1,8 +1,5 @@
 #include <TimerOne.h>
-#include <MIDI.h>
 #include <MIDIUSB.h>
-
-MIDI_CREATE_DEFAULT_INSTANCE();
 
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
@@ -190,10 +187,6 @@ void setup() {
   Timer1.attachInterrupt(noteSetter);
   Timer1.start();
 
-  MIDI.setHandleNoteOn(handleMIDINoteOn);
-  MIDI.setHandleNoteOff(handleMIDINoteOff);
-  MIDI.begin(MIDI_CHANNEL_OMNI);
-  
   if (USE_SERIAL) {
     Serial.begin(SERIAL_BPS);
     Serial.setTimeout(10); // parseInt uses this timeout
@@ -224,30 +217,25 @@ void noteSetter() {
   }
 }
 
-void handleMIDINoteOn(byte inChannel, byte inNote, byte inVelocity) {
-  inChannel = inChannel; inVelocity = inVelocity;
-  MIDI.sendNoteOn(inNote, inVelocity, inChannel);
-  //Serial.print("On ");
-  //Serial.println(inNote);
-}
-void handleMIDINoteOff(byte inChannel, byte inNote, byte inVelocity) {
-  inChannel = inChannel; inVelocity = inVelocity;
-  MIDI.sendNoteOff(inNote, inVelocity, inChannel);
-  //Serial.print("Off ");
-  //Serial.println(inNote);
-}
-
 void loop() {
   
-  MIDI.read();
-  
-  delay(1000);
-  MIDI.sendNoteOn(60, 127, 1);
-  delay(100);
-  MIDI.sendNoteOff(60, 127, 1);
   digitalWrite(PIN_LED, abs(digitalRead(PIN_LED) - 1));
   
-  
+  midiEventPacket_t rx;
+  do {
+    rx = MIDIUSB.read();
+    if (rx.header != 0) {
+      Serial.print("Received: ");
+      Serial.print(rx.header, HEX);
+      Serial.print("-");
+      Serial.print(rx.byte1, HEX);
+      Serial.print("-");
+      Serial.print(rx.byte2, HEX);
+      Serial.print("-");
+      Serial.println(rx.byte3, HEX);
+    }
+  } while (rx.header != 0);
+
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
     if (!autoPlayingNote && noteChangeCounter >= noteChangeThreshold) {
