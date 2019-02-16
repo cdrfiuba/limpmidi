@@ -1,5 +1,6 @@
 #include <TimerOne.h>
 #include <MIDIUSB.h>
+#include <pitchToNote.h>
 
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
@@ -60,6 +61,11 @@ const unsigned char C_2  = C_3 * 2;
 
 const unsigned char END = 255;  // loop
 
+// midi constants
+const unsigned char MESSAGE_NOTE_OFF = 0b1000;
+const unsigned char MESSAGE_NOTE_ON = 0b1001;
+const unsigned char MASK_MESSAGE_CHANNEL = 0b00001111;
+
 const bool INITIAL_AUTO_PLAY = false;
 bool autoPlay = INITIAL_AUTO_PLAY;
 
@@ -114,26 +120,6 @@ char debug_string_buffer[20];
 #define debug(formato, valor) \
   sprintf(debug_string_buffer, formato, valor); \
   Serial.print(debug_string_buffer)
-
-/*
-
-http://web.archive.org/web/20180206075622/http://www.electronics.dit.ie/staff/tscarff/Music_technology/midi/midi_note_numbers_for_octaves.htm
-
-                        Note Numbers                  
-Octave   C  C#   D  D#   E   F  F#   G  G#   A  A#   B 
-  0    000 001 002 003 004 005 006 007 008 009 010 011
-  1    012 013 014 015 016 017 018 019 020 021 022 023
-  2    024 025 026 027 028 029 030 031 032 033 034 035
-  3    036 037 038 039 040 041 042 043 044 045 046 047
-  4    048 049 050 051 052 053 054 055 056 057 058 059
-  5    060 061 062 063 064 065 066 067 068 069 070 071
-  6    072 073 074 075 076 077 078 079 080 081 082 083
-  7    084 085 086 087 088 089 090 091 092 093 094 095
-  8    096 097 098 099 100 101 102 103 104 105 106 107
-  9    108 109 110 111 112 113 114 115 116 117 118 119
- 10    120 121 122 123 124 125 126 127 
- 
-*/
 
 void setup() {
   
@@ -223,18 +209,91 @@ void loop() {
   
   midiEventPacket_t rx;
   do {
-    rx = MIDIUSB.read();
+    rx = MidiUSB.read();
     if (rx.header != 0) {
-      Serial.print("Received: ");
-      Serial.print(rx.header, HEX);
-      Serial.print("-");
-      Serial.print(rx.byte1, HEX);
-      Serial.print("-");
-      Serial.print(rx.byte2, HEX);
-      Serial.print("-");
-      Serial.println(rx.byte3, HEX);
+      unsigned char message = (rx.byte1 >> 4) & MASK_MESSAGE_CHANNEL;
+      unsigned char channel = (rx.byte1 & MASK_MESSAGE_CHANNEL) + 1;
+      unsigned char note = rx.byte2;
+      if (channel == 1 || channel == 2 || channel == 3 || channel == 4) {
+        if (message == MESSAGE_NOTE_ON || message == MESSAGE_NOTE_OFF) {
+          //~ Serial.print(channel);
+          //~ Serial.print(": ");
+          //~ Serial.print(rx.byte2);
+          //~ Serial.print("@");
+          //~ Serial.print(rx.byte3);
+          //~ Serial.print("\n");
+        }
+        switch (note) {
+          case pitchB5:  nextPeriod = B_4;   break;
+          case pitchB5b: nextPeriod = Bb_4;  break;
+          case pitchA5:  nextPeriod = A_4;   break;
+          case pitchA5b: nextPeriod = Ab_4;  break;
+          case pitchG5:  nextPeriod = G_4;   break;
+          case pitchG5b: nextPeriod = Gb_4;  break;
+          case pitchF5:  nextPeriod = F_4;   break;
+          case pitchE5:  nextPeriod = E_4;   break;
+          case pitchE5b: nextPeriod = Eb_4;  break;
+          case pitchD5:  nextPeriod = D_4;   break;
+          case pitchD5b: nextPeriod = Db_4;  break;
+          case pitchC5:  nextPeriod = C_4;   break; // C4
+          
+          case pitchB4:  nextPeriod = B_4;   break;
+          case pitchB4b: nextPeriod = Bb_4;  break;
+          case pitchA4:  nextPeriod = A_4;   break;
+          case pitchA4b: nextPeriod = Ab_4;  break;
+          case pitchG4:  nextPeriod = G_4;   break;
+          case pitchG4b: nextPeriod = Gb_4;  break;
+          case pitchF4:  nextPeriod = F_4;   break;
+          case pitchE4:  nextPeriod = E_4;   break;
+          case pitchE4b: nextPeriod = Eb_4;  break;
+          case pitchD4:  nextPeriod = D_4;   break;
+          case pitchD4b: nextPeriod = Db_4;  break;
+          case pitchC4:  nextPeriod = C_4;   break; // C4
+          
+          case pitchB3:  nextPeriod = B_3;   break;
+          case pitchB3b: nextPeriod = Bb_3;  break;
+          case pitchA3:  nextPeriod = A_3;   break;
+          case pitchA3b: nextPeriod = Ab_3;  break;
+          case pitchG3:  nextPeriod = G_3;   break;
+          case pitchG3b: nextPeriod = Gb_3;  break;
+          case pitchF3:  nextPeriod = F_3;   break;
+          case pitchE3:  nextPeriod = E_3;   break;
+          case pitchE3b: nextPeriod = Eb_3;  break;
+          case pitchD3:  nextPeriod = D_3;   break;
+          case pitchD3b: nextPeriod = Db_3;  break;
+          case pitchC3:  nextPeriod = C_3;   break; // C3
+          
+          case pitchB2:  nextPeriod = B_3;   break;
+          case pitchB2b: nextPeriod = Bb_3;  break;
+          case pitchA2:  nextPeriod = A_3;   break;
+          case pitchA2b: nextPeriod = Ab_3;  break;
+          case pitchG2:  nextPeriod = G_3;   break;
+          case pitchG2b: nextPeriod = Gb_3;  break;
+          case pitchF2:  nextPeriod = F_3;   break;
+          case pitchE2:  nextPeriod = E_3;   break;
+          case pitchE2b: nextPeriod = Eb_3;  break;
+          case pitchD2:  nextPeriod = D_3;   break;
+          case pitchD2b: nextPeriod = Db_3;  break;
+          case pitchC2:  nextPeriod = C_3;   break; // C3
+        }
+        if (message == MESSAGE_NOTE_ON) {
+          playCurrentNote[channel - 1] = true;
+          currentPeriod[channel - 1] = nextPeriod;
+          tick[channel - 1] = 0;
+          //~ printCurrentNote(channel - 1);
+        }
+        if (message == MESSAGE_NOTE_OFF) {
+          playCurrentNote[channel - 1] = false;
+        }
+        //~ nextPeriod = REST;
+          
+        //~ // send back the received MIDI command
+        //~ MidiUSB.sendMIDI(rx);
+        //~ MidiUSB.flush();
+      }
     }
   } while (rx.header != 0);
+  delay(5);
 
   // every noteChangeThreshold ms, change note
   if (autoPlay) {
