@@ -173,6 +173,10 @@ class Game():
                     self.ser.write("!-")
                     self.special_message = Message("SLOWER")
                     self.show_special_message = True
+                elif e.key == K_F9:
+                    self.ser.write("!r")
+                    self.special_message = Message("RESET")
+                    self.show_special_message = True
                 elif e.key == K_F12:
                     self.special_message = Message("**RESTART**")
                     self.show_special_message = True
