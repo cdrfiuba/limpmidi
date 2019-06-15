@@ -7,6 +7,7 @@ import os
 import serial
 import serial.tools.list_ports
 import platform
+import midi
 
 VERSION = 0.2
 
@@ -66,7 +67,11 @@ class Game():
             port_name = "COM%s"
         self.bps = 2000000
         self.port = port_name % port_number
-        self.ser = serial.Serial(self.port, self.bps, timeout=1)
+        #self.ser = serial.Serial(self.port, self.bps, timeout=1)
+        
+        self.octave = 4
+        
+        self.midi = midi.MidiConnector(self.port, timeout=0.016)
 
         # pygame init
         display.init()
@@ -139,7 +144,15 @@ class Game():
                     self.current_char = char
                     self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
                     self.show_text_message = True
-                    self.ser.write(">" + char)
+                    #self.ser.write(">" + char)
+                    note = self.charkey_to_note(char)
+                    note_on = midi.NoteOn(note, 127)
+                    msg = midi.Message(note_on, channel=1)
+                    self.midi.write(msg)
+                    
+                    msg = self.midi.read()
+                    print(msg)
+        
                 # special functions
                 if e.key == K_F1:
                     self.ser.write("!f")
@@ -185,7 +198,11 @@ class Game():
             elif e.type == KEYUP:
                 if (e.key < 256):
                     char = chr(e.key)
-                    self.ser.write("<" + char)
+                    note = self.charkey_to_note(char)
+                    note_on = midi.NoteOff(note, 127)
+                    msg = midi.Message(note_on, channel=1)
+                    self.midi.write(msg)
+                    #self.ser.write("<" + char)
                 self.show_special_message = False
                 if (self.current_char == char):
                     self.show_text_message = False
@@ -224,6 +241,43 @@ class Game():
             else:
                 self.real_window = display.set_mode(Screen.window_rect.size, WINDOWED+RESIZABLE, BIT_DEPTH)
 
+    def charkey_to_note(self, char):
+        if char == "z": return self.octave * 12 + 0
+        if char == "s": return self.octave * 12 + 1
+        if char == "x": return self.octave * 12 + 2
+        if char == "d": return self.octave * 12 + 3
+        if char == "c": return self.octave * 12 + 4
+        if char == "v": return self.octave * 12 + 5
+        if char == "g": return self.octave * 12 + 6
+        if char == "b": return self.octave * 12 + 7
+        if char == "h": return self.octave * 12 + 8
+        if char == "n": return self.octave * 12 + 9
+        if char == "j": return self.octave * 12 + 10
+        if char == "m": return self.octave * 12 + 11
+        if char == ",": return self.octave * 12 + 12
+        if char == "l": return self.octave * 12 + 13
+        if char == ".": return self.octave * 12 + 14
+        if char == "ñ": return self.octave * 12 + 15
+        if char == "-": return self.octave * 12 + 16
+        
+        if char == "q": return self.octave * 12 + 12
+        if char == "2": return self.octave * 12 + 13
+        if char == "w": return self.octave * 12 + 14
+        if char == "3": return self.octave * 12 + 15
+        if char == "e": return self.octave * 12 + 16
+        if char == "r": return self.octave * 12 + 17
+        if char == "5": return self.octave * 12 + 18
+        if char == "t": return self.octave * 12 + 19
+        if char == "6": return self.octave * 12 + 20
+        if char == "y": return self.octave * 12 + 21
+        if char == "7": return self.octave * 12 + 22
+        if char == "u": return self.octave * 12 + 23
+        if char == "i": return self.octave * 12 + 24
+        if char == "9": return self.octave * 12 + 25
+        if char == "o": return self.octave * 12 + 26
+        if char == "0": return self.octave * 12 + 27
+        if char == "p": return self.octave * 12 + 28
+        
 class Message():
     def __init__(self, text=" ", text_color=Colors.WHITE, bg_color=Colors.BLACK):
         message_font = font.SysFont("Courier", 24)
@@ -245,10 +299,10 @@ class Message():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Falta el puerto (tty USB o COM).")
-        print("Puertos disponibles:")
+        print("Port is missing (tty USB o COM).")
+        print("Available ports:")
         available_ports = list(serial.tools.list_ports.comports())
-        print "\n".join([str(x) for x in available_ports])
+        print("\n".join([str(x) for x in available_ports]))
         sys.exit()
     
     game = Game()

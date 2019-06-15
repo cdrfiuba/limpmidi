@@ -207,14 +207,23 @@ void noteSetter() {
 void loop() {
   
   if (USE_MIDI) {
-    digitalWrite(PIN_LED, abs(digitalRead(PIN_LED) - 1));
     midiEventPacket_t rx;
     do {
       rx = MidiUSB.read();
       if (rx.header != 0) {
+        digitalWrite(PIN_LED, abs(digitalRead(PIN_LED) - 1));
         unsigned char message = (rx.byte1 >> 4) & MASK_MESSAGE_CHANNEL;
         unsigned char channel = (rx.byte1 & MASK_MESSAGE_CHANNEL) + 1;
         unsigned char note = rx.byte2;
+        unsigned char velocity = rx.byte3;
+        /*Serial.print("ch");
+        Serial.print(channel);
+        Serial.print(", n ");
+        Serial.print(note);
+        Serial.print(", v");
+        Serial.print(velocity);
+        Serial.print("\n");*/
+        
         if (channel == 1 || channel == 2 || channel == 3 || channel == 4) {
           if (message == MESSAGE_NOTE_ON || message == MESSAGE_NOTE_OFF) {
             //~ Serial.print(channel);
@@ -288,10 +297,10 @@ void loop() {
           }
           //~ nextPeriod = REST;
             
-          //~ // send back the received MIDI command
-          //~ MidiUSB.sendMIDI(rx);
-          //~ MidiUSB.flush();
         }
+        // send back the received MIDI command
+        //MidiUSB.sendMIDI(rx);
+        //MidiUSB.flush();
       }
     } while (rx.header != 0);
     delay(5);
