@@ -1,13 +1,14 @@
 # -*- coding: iso-8859-1 -*-
 from __future__ import division
 from pygame import *
+import pygame
+import pygame.midi as midi
 import random
 import sys
 import os
 import serial
 import serial.tools.list_ports
 import platform
-import midi
 
 VERSION = 0.2
 
@@ -69,10 +70,14 @@ class Game():
         self.port = port_name % port_number
         #self.ser = serial.Serial(self.port, self.bps, timeout=1)
         
+        # midi init
+        midi.init()
+        self.midi = pygame.midi.Output(int(port_number), latency=0, buffer_size=8)
+        #self.midi = midi.MidiConnector(self.port, timeout=0.016)
+
+        # for use with notes
         self.octave = 4
         
-        self.midi = midi.MidiConnector(self.port, timeout=0.016)
-
         # pygame init
         display.init()
         font.init()
@@ -146,12 +151,10 @@ class Game():
                     self.show_text_message = True
                     #self.ser.write(">" + char)
                     note = self.charkey_to_note(char)
-                    note_on = midi.NoteOn(note, 127)
-                    msg = midi.Message(note_on, channel=1)
-                    self.midi.write(msg)
+                    self.midi.note_off(note, velocity=127, channel=1)
                     
-                    msg = self.midi.read()
-                    print(msg)
+                    #msg = self.midi.read()
+                    #print(msg)
         
                 # special functions
                 if e.key == K_F1:
@@ -199,9 +202,7 @@ class Game():
                 if (e.key < 256):
                     char = chr(e.key)
                     note = self.charkey_to_note(char)
-                    note_on = midi.NoteOff(note, 127)
-                    msg = midi.Message(note_on, channel=1)
-                    self.midi.write(msg)
+                    self.midi.note_off(note, velocity=127, channel=1)
                     #self.ser.write("<" + char)
                 self.show_special_message = False
                 if (self.current_char == char):
@@ -299,12 +300,24 @@ class Message():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
+        # print serial ports
         print("Port is missing (tty USB o COM).")
-        print("Available ports:")
+        print("\nAvailable serial ports:")
         available_ports = list(serial.tools.list_ports.comports())
         print("\n".join([str(x) for x in available_ports]))
+        
+        # print midi ports
+        midi.init()
+        midi_devices = midi.get_count()
+        print("\nAvailable MIDI Devices:")
+        for i in range(midi_devices):
+            # (interf, name, input, output, opened)
+            device = midi.get_device_info(i)
+            #print(", ".join([repr(d) for d in midi.get_device_info(i)]))
+            print("%s: %s (%s)" % (i, str(device[1], "utf-8"), ("input" if device[2] else "") + ("output" if device[3] else "")))
+        
         sys.exit()
     
     game = Game()
     game.main()
-
+    
