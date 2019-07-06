@@ -59,21 +59,34 @@ class Colors():
     DARK_RED = (180, 0, 0)
 
 class Game():
+    MODE_MIDI, MODE_SERIAL = range(2)
+    
     def main(self):
         # serial init
-        port_number = sys.argv[1]
-        if platform.system() == "Linux":
-            port_name = "/dev/tty%s"
-        elif platform.system() == "Windows":
-            port_name = "COM%s"
+        #port_number = sys.argv[1]
+        #if platform.system() == "Linux":
+        #    port_name = "/dev/tty%s"
+        #elif platform.system() == "Windows":
+        #    port_name = "COM%s"
         self.bps = 2000000
-        self.port = port_name % port_number
-        #self.ser = serial.Serial(self.port, self.bps, timeout=1)
+        #self.port = port_name % port_number
+        self.port = sys.argv[1]
         
-        # midi init
-        midi.init()
-        self.midi = pygame.midi.Output(int(port_number), latency=0, buffer_size=8)
-        #self.midi = midi.MidiConnector(self.port, timeout=0.016)
+        # if the port is numeric, it's a MIDI device,
+        # if the port is not numeric, it's the name of a serial port
+        try:
+            self.mode = Game.MODE_MIDI
+            self.port = int(self.port)
+        except ValueError:
+            self.mode = Game.MODE_SERIAL
+            self.port = str(self.port)
+        
+        if (self.mode == Game.MODE_MIDI):
+            # midi init
+            midi.init()
+            self.midi = pygame.midi.Output(self.port, latency=1, buffer_size=1)
+        else:
+            self.ser = serial.Serial(self.port, self.bps, timeout=1)
 
         # for use with notes
         self.octave = 4
@@ -143,70 +156,87 @@ class Game():
             self.handle_events_resize(e)
             self.handle_events_fullscreen(e)
             char = ""
-            if e.type == KEYDOWN:
-                if (e.key < 256):
-                    char = chr(e.key)
-                    self.current_char = char
-                    self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
-                    self.show_text_message = True
-                    #self.ser.write(">" + char)
-                    note = self.charkey_to_note(char)
-                    self.midi.note_off(note, velocity=127, channel=1)
-                    
-                    #msg = self.midi.read()
-                    #print(msg)
-        
-                # special functions
-                if e.key == K_F1:
-                    self.ser.write("!f")
-                    self.special_message = Message("MOTOR FORWARD")
-                    self.show_special_message = True
-                elif e.key == K_F2:
-                    self.ser.write("!b")
-                    self.special_message = Message("MOTOR BACKWARD")
-                    self.show_special_message = True
-                elif e.key == K_F3:
-                    self.ser.write("!m2")
-                    self.special_message = Message("MAXIMUM VOLUME")
-                    self.show_special_message = True
-                elif e.key == K_F4:
-                    self.ser.write("!m160")
-                    self.special_message = Message("MAXIMUM MOVEMENT")
-                    self.show_special_message = True
-                elif e.key == K_F5:
-                    self.ser.write("!p")
-                    self.special_message = Message("PLAY / PAUSE")
-                    self.show_special_message = True
-                elif e.key == K_F6:
-                    self.ser.write("!s")
-                    self.special_message = Message("STOP")
-                    self.show_special_message = True
-                elif e.key == K_F7:
-                    self.ser.write("!+")
-                    self.special_message = Message("FASTER")
-                    self.show_special_message = True
-                elif e.key == K_F8:
-                    self.ser.write("!-")
-                    self.special_message = Message("SLOWER")
-                    self.show_special_message = True
-                elif e.key == K_F9:
-                    self.ser.write("!r")
-                    self.special_message = Message("RESET")
-                    self.show_special_message = True
-                elif e.key == K_F12:
-                    self.special_message = Message("**RESTART**")
-                    self.show_special_message = True
-                    self.ser.close()
-                    self.ser = serial.Serial(self.port, self.bps, timeout=1)
-            elif e.type == KEYUP:
-                if (e.key < 256):
-                    char = chr(e.key)
-                    note = self.charkey_to_note(char)
-                    self.midi.note_off(note, velocity=127, channel=1)
-                    #self.ser.write("<" + char)
-                self.show_special_message = False
-                if (self.current_char == char):
-                    self.show_text_message = False
+            
+            # Midi Mode
+            if (self.mode == Game.MODE_MIDI):
+                if e.type == KEYDOWN:
+                    if (e.key < 256):
+                        char = chr(e.key)
+                        self.current_char = char
+                        self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
+                        self.show_text_message = True
+                        note = self.charkey_to_note(char)
+                        self.midi.note_off(note, velocity=127, channel=1)
+                        #msg = self.midi.read()
+                        #print(msg)
+                elif e.type == KEYUP:
+                    if (e.key < 256):
+                        char = chr(e.key)
+                        note = self.charkey_to_note(char)
+                        self.midi.note_off(note, velocity=127, channel=1)
+                    self.show_special_message = False
+                    if (self.current_char == char):
+                        self.show_text_message = False
+                        
+            # Serial Mode
+            if (self.mode == Game.MODE_SERIAL):
+                if e.type == KEYDOWN:
+                    if (e.key < 256):
+                        char = chr(e.key)
+                        self.current_char = char
+                        self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
+                        self.show_text_message = True
+                        self.ser.write(">" + char)
+            
+                    # special functions
+                    if e.key == K_F1:
+                        self.ser.write("!f")
+                        self.special_message = Message("MOTOR FORWARD")
+                        self.show_special_message = True
+                    elif e.key == K_F2:
+                        self.ser.write("!b")
+                        self.special_message = Message("MOTOR BACKWARD")
+                        self.show_special_message = True
+                    elif e.key == K_F3:
+                        self.ser.write("!m2")
+                        self.special_message = Message("MAXIMUM VOLUME")
+                        self.show_special_message = True
+                    elif e.key == K_F4:
+                        self.ser.write("!m160")
+                        self.special_message = Message("MAXIMUM MOVEMENT")
+                        self.show_special_message = True
+                    elif e.key == K_F5:
+                        self.ser.write("!p")
+                        self.special_message = Message("PLAY / PAUSE")
+                        self.show_special_message = True
+                    elif e.key == K_F6:
+                        self.ser.write("!s")
+                        self.special_message = Message("STOP")
+                        self.show_special_message = True
+                    elif e.key == K_F7:
+                        self.ser.write("!+")
+                        self.special_message = Message("FASTER")
+                        self.show_special_message = True
+                    elif e.key == K_F8:
+                        self.ser.write("!-")
+                        self.special_message = Message("SLOWER")
+                        self.show_special_message = True
+                    elif e.key == K_F9:
+                        self.ser.write("!r")
+                        self.special_message = Message("RESET")
+                        self.show_special_message = True
+                    elif e.key == K_F12:
+                        self.special_message = Message("**RESTART**")
+                        self.show_special_message = True
+                        self.ser.close()
+                        self.ser = serial.Serial(self.port, self.bps, timeout=1)
+                elif e.type == KEYUP:
+                    if (e.key < 256):
+                        char = chr(e.key)
+                        self.ser.write("<" + char)
+                    self.show_special_message = False
+                    if (self.current_char == char):
+                        self.show_text_message = False
                         
         if self.show_special_message:
             self.special_message.pos.center = (
@@ -278,6 +308,8 @@ class Game():
         if char == "o": return self.octave * 12 + 26
         if char == "0": return self.octave * 12 + 27
         if char == "p": return self.octave * 12 + 28
+        
+        return 0
         
 class Message():
     def __init__(self, text=" ", text_color=Colors.WHITE, bg_color=Colors.BLACK):
