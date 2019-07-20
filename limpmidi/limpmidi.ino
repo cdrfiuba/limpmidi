@@ -4,7 +4,7 @@
 
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
-const bool USE_MIDI = false;
+const bool USE_MIDI = true;
 
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 1; // rojo

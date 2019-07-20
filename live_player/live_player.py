@@ -90,6 +90,7 @@ class Game():
 
         # for use with notes
         self.octave = 4
+        self.channel = 1
         
         # pygame init
         display.init()
@@ -166,14 +167,27 @@ class Game():
                         self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
                         self.show_text_message = True
                         note = self.charkey_to_note(char)
-                        self.midi.note_off(note, velocity=127, channel=1)
+                        self.midi.note_on(note, velocity=127, channel=self.channel)
                         #msg = self.midi.read()
                         #print(msg)
+                    if e.key >= K_KP0 and e.key <= K_KP9:
+                        self.channel = e.key - K_KP0
+                        self.special_message = Message("CHANNEL %s" % self.channel)
+                        self.show_special_message = True
+                    elif e.key == K_KP_PLUS:
+                        self.octave += 1
+                        self.special_message = Message("OCTAVE %s" % self.octave)
+                        self.show_special_message = True
+                    elif e.key == K_KP_MINUS:
+                        self.octave -= 1
+                        self.special_message = Message("OCTAVE %s" % self.octave)
+                        self.show_special_message = True
+
                 elif e.type == KEYUP:
                     if (e.key < 256):
                         char = chr(e.key)
                         note = self.charkey_to_note(char)
-                        self.midi.note_off(note, velocity=127, channel=1)
+                        self.midi.note_off(note, velocity=127, channel=self.channel)
                     self.show_special_message = False
                     if (self.current_char == char):
                         self.show_text_message = False
