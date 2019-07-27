@@ -1,16 +1,18 @@
 # -*- coding: iso-8859-1 -*-
-from __future__ import division
+
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+
 from pygame import *
 import pygame
 import pygame.midi as midi
-import random
+
 import sys
-import os
 import serial
 import serial.tools.list_ports
-import platform
+import argparse
 
-VERSION = 0.2
+VERSION = 0.3
 
 DEBUG = True
 
@@ -59,34 +61,61 @@ class Colors():
     DARK_RED = (180, 0, 0)
 
 class Game():
-    MODE_MIDI, MODE_SERIAL = range(2)
+    MODE_MIDI, MODE_SERIAL = list(range(2))
+
+    def list_ports(self):
+        # print serial ports
+        print("Available serial ports:")
+        available_ports = list(serial.tools.list_ports.comports())
+        print(("\n".join([str(x) for x in available_ports])))
+        
+        # print midi devices
+        midi.init()
+        midi_devices = midi.get_count()
+        print("\nAvailable MIDI devices:")
+        for i in range(midi_devices):
+            # (interf, name, input, output, opened)
+            device = midi.get_device_info(i)
+            print("%s: %s (%s)" % (i, str(device[1], "utf-8"), ("input" if device[2] else "") + ("output" if device[3] else "")))
     
     def main(self):
-        # serial init
-        #port_number = sys.argv[1]
-        #if platform.system() == "Linux":
-        #    port_name = "/dev/tty%s"
-        #elif platform.system() == "Windows":
-        #    port_name = "COM%s"
-        self.bps = 2000000
-        #self.port = port_name % port_number
-        self.port = sys.argv[1]
+
+        # initiate the parser
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-si", "--serial-input", help="set serial input port (eg: /dev/tty)")
+        parser.add_argument("-so", "--serial-output", help="set serial output port (eg: /dev/tty)")
+        parser.add_argument("-m", "--midi", help="set midi output device (eg: 0)", type=int)
+        parser.add_argument("-l", "--list-ports", help="show serial ports and MIDI devices available and exit", action="store_true")
+
+        # read arguments from the command line
+        args = parser.parse_args()
+
+        if args.list_ports:
+            self.list_ports()
+            parser.exit()
+
+        if not args.serial_output and not args.midi:
+            print("Error: Serial port or MIDI device is missing.\n")
+            self.list_ports()
+            parser.exit()
         
-        # if the port is numeric, it's a MIDI device,
-        # if the port is not numeric, it's the name of a serial port
-        try:
-            self.mode = Game.MODE_MIDI
-            self.port = int(self.port)
-        except ValueError:
+        if args.serial_output and args.midi:
+            print("Error: Must only specify Serial or MIDI.")
+            parser.exit()
+        
+        if args.serial_output or args.serial_input:
             self.mode = Game.MODE_SERIAL
-            self.port = str(self.port)
+            # serial init
+            self.bps = 2000000
+            self.port = args.serial_output or args.serial_input
+            self.ser = serial.Serial(self.port, self.bps, timeout=1)
         
-        if (self.mode == Game.MODE_MIDI):
+        if args.midi:
+            self.mode = Game.MODE_MIDI
             # midi init
             midi.init()
-            self.midi = pygame.midi.Output(self.port, latency=1, buffer_size=1)
-        else:
-            self.ser = serial.Serial(self.port, self.bps, timeout=1)
+            self.port = int(args.midi)
+            self.midi = midi.Output(self.port, latency=1, buffer_size=1)
 
         # for use with notes
         self.octave = 4
@@ -200,43 +229,43 @@ class Game():
                         self.current_char = char
                         self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
                         self.show_text_message = True
-                        self.ser.write(">" + char)
+                        self.serial_write(">" + char)
             
                     # special functions
                     if e.key == K_F1:
-                        self.ser.write("!f")
+                        self.serial_write("!f")
                         self.special_message = Message("MOTOR FORWARD")
                         self.show_special_message = True
                     elif e.key == K_F2:
-                        self.ser.write("!b")
+                        self.serial_write("!b")
                         self.special_message = Message("MOTOR BACKWARD")
                         self.show_special_message = True
                     elif e.key == K_F3:
-                        self.ser.write("!m2")
+                        self.serial_write("!m2")
                         self.special_message = Message("MAXIMUM VOLUME")
                         self.show_special_message = True
                     elif e.key == K_F4:
-                        self.ser.write("!m160")
+                        self.serial_write("!m160")
                         self.special_message = Message("MAXIMUM MOVEMENT")
                         self.show_special_message = True
                     elif e.key == K_F5:
-                        self.ser.write("!p")
+                        self.serial_write("!p")
                         self.special_message = Message("PLAY / PAUSE")
                         self.show_special_message = True
                     elif e.key == K_F6:
-                        self.ser.write("!s")
+                        self.serial_write("!s")
                         self.special_message = Message("STOP")
                         self.show_special_message = True
                     elif e.key == K_F7:
-                        self.ser.write("!+")
+                        self.serial_write("!+")
                         self.special_message = Message("FASTER")
                         self.show_special_message = True
                     elif e.key == K_F8:
-                        self.ser.write("!-")
+                        self.serial_write("!-")
                         self.special_message = Message("SLOWER")
                         self.show_special_message = True
                     elif e.key == K_F9:
-                        self.ser.write("!r")
+                        self.serial_write("!r")
                         self.special_message = Message("RESET")
                         self.show_special_message = True
                     elif e.key == K_F12:
@@ -247,7 +276,7 @@ class Game():
                 elif e.type == KEYUP:
                     if (e.key < 256):
                         char = chr(e.key)
-                        self.ser.write("<" + char)
+                        self.serial_write("<" + char)
                     self.show_special_message = False
                     if (self.current_char == char):
                         self.show_text_message = False
@@ -264,7 +293,7 @@ class Game():
 
     def handle_events_quit(self, event):
         if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-            quit()
+            self.midi.close()
             sys.exit()
 
     def handle_events_fullscreen(self, event):
@@ -324,6 +353,9 @@ class Game():
         if char == "p": return self.octave * 12 + 28
         
         return 0
+
+    def serial_write(self, chars):
+        self.ser.write(bytes(chars, "utf-8"))
         
 class Message():
     def __init__(self, text=" ", text_color=Colors.WHITE, bg_color=Colors.BLACK):
@@ -345,25 +377,6 @@ class Message():
                 0, 0, self.surf.get_rect().width, self.surf.get_rect().height)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        # print serial ports
-        print("Port is missing (tty USB o COM).")
-        print("\nAvailable serial ports:")
-        available_ports = list(serial.tools.list_ports.comports())
-        print("\n".join([str(x) for x in available_ports]))
-        
-        # print midi ports
-        midi.init()
-        midi_devices = midi.get_count()
-        print("\nAvailable MIDI Devices:")
-        for i in range(midi_devices):
-            # (interf, name, input, output, opened)
-            device = midi.get_device_info(i)
-            #print(", ".join([repr(d) for d in midi.get_device_info(i)]))
-            print("%s: %s (%s)" % (i, str(device[1], "utf-8"), ("input" if device[2] else "") + ("output" if device[3] else "")))
-        
-        sys.exit()
-    
     game = Game()
     game.main()
     
