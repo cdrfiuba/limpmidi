@@ -1,12 +1,12 @@
 # -*- coding: iso-8859-1 -*-
 
 import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import contextlib
+with contextlib.redirect_stdout(None):
+    import pygame
 
 from pygame import *
-import pygame
 import pygame.midi as midi
-
 import sys
 import serial
 import serial.tools.list_ports
@@ -19,6 +19,7 @@ DEBUG = True
 VIEWPORT_SIZE = (480, 270)
 VIEWPORT_SIZE_RATIO = 2
 INITIAL_VIEWPORT_SIZE = tuple([sizes * VIEWPORT_SIZE_RATIO for sizes in VIEWPORT_SIZE])
+INITIAL_FULLSCREEN_MODE = False
 
 RECT_INIT = (0, 0)
 RECT_CENTER = (VIEWPORT_SIZE[0] / 2, VIEWPORT_SIZE[1] / 2)
@@ -37,6 +38,9 @@ cd = os.path.join
 MAIN_PATH = os.path.dirname(__file__)
 RES_PATH = cd(MAIN_PATH, "res")
 
+INVALID_NOTE = -1
+MIN_NOTE = 0
+MAX_NOTE = 127 # 0b1111
 
 # SDL CONFIGS
 # the windib driver works best on Windows,
@@ -46,6 +50,7 @@ if sys.platform == "win32":
 os.environ['SDL_VIDEO_CENTERED'] = '1'
 
 class Screen():
+    monitor_rect = rect.Rect(RECT_INIT, INITIAL_VIEWPORT_SIZE)
     window_rect = rect.Rect(RECT_INIT, INITIAL_VIEWPORT_SIZE)
     rect = rect.Rect(RECT_INIT, VIEWPORT_SIZE)
 
@@ -102,6 +107,10 @@ class Game():
         if args.serial_output and args.midi:
             print("Error: Must only specify Serial or MIDI.")
             parser.exit()
+            
+        self.serial_input_available = False
+        if args.serial_input:
+            self.serial_input_available = True
         
         if args.serial_output or args.serial_input:
             self.mode = Game.MODE_SERIAL
@@ -115,7 +124,7 @@ class Game():
             # midi init
             midi.init()
             self.port = int(args.midi)
-            self.midi = midi.Output(self.port, latency=1, buffer_size=1)
+            self.midi = midi.Output(self.port, latency=0, buffer_size=0)
 
         # for use with notes
         self.octave = 4
@@ -124,26 +133,26 @@ class Game():
         # pygame init
         display.init()
         font.init()
+        display_info = display.Info()
+        Screen.monitor_rect.size = (display_info.current_w, display_info.current_h)
 
-        self.fullscreen = False
+        self.fullscreen = INITIAL_FULLSCREEN_MODE
         if self.fullscreen:
-            self.real_window = display.set_mode(INITIAL_VIEWPORT_SIZE, FULLSCREEN, BIT_DEPTH)
+            self.real_window = display.set_mode(Screen.monitor_rect.size, FULLSCREEN, BIT_DEPTH)
         else:
-            self.real_window = display.set_mode(INITIAL_VIEWPORT_SIZE, WINDOWED+RESIZABLE, BIT_DEPTH)
+            self.real_window = display.set_mode(Screen.window_rect.size, WINDOWED+RESIZABLE, BIT_DEPTH)
         self.window = surface.Surface(VIEWPORT_SIZE)
         
         # clock
         clock = time.Clock()
         
         # fonts        
-        self.osd_font = font.SysFont("Courier", 16)
-        self.title_font = font.SysFont("Courier", 24) # @800x600, max 56 chars
-        self.big_font = font.SysFont("Courier", 60, bold=True)
+        self.osd_font = font.SysFont("monospace", 14)
+        self.title_font = font.SysFont("monospace", 24) # @800x600, max 56 chars
+        self.big_font = font.SysFont("monospace", 60, bold=True)
 
         # pseudo message box
-        self.show_special_message = False
-        self.show_text_message = False
-        self.special_message = Message("Error")
+        self.special_message = None
         self.text_message = self.big_font.render("", NOALIAS, Colors.WHITE)
         self.current_char = ""
         
@@ -170,7 +179,11 @@ class Game():
                     self.window.blit(text_fps, (5, 20))
 
             # update window
-            transform.smoothscale(self.window, Screen.window_rect.size, self.real_window)
+            if self.fullscreen:
+                transform.scale(self.window, Screen.monitor_rect.size, self.real_window)
+            else:
+                transform.smoothscale(self.window, Screen.window_rect.size, self.real_window)
+
             display.update()
 
     def handle_game(self):
@@ -179,6 +192,13 @@ class Game():
         bg = surface.Surface(VIEWPORT_SIZE)
         bg.fill(Colors.GRAY)
         self.window.blit(bg, RECT_INIT)
+        
+        # read serial inputs
+        if self.serial_input_available:
+            incoming_serial_bytes = self.ser.inWaiting()
+            if incoming_serial_bytes > 0:
+                data_str = self.ser.read(incoming_serial_bytes).decode('ascii')
+                print(data_str, end='')
         
         # inputs
         for e in event.get():
@@ -193,33 +213,32 @@ class Game():
                     if (e.key < 256):
                         char = chr(e.key)
                         self.current_char = char
-                        self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
-                        self.show_text_message = True
                         note = self.charkey_to_note(char)
-                        self.midi.note_on(note, velocity=127, channel=self.channel)
-                        #msg = self.midi.read()
-                        #print(msg)
+                        if (note >= MIN_NOTE and note <= MAX_NOTE):
+                            self.text_message = self.big_font.render(self.note_to_text(note), NOALIAS, Colors.WHITE)
+                            self.midi.note_on(note, velocity=127, channel=self.channel)
                     if e.key >= K_KP0 and e.key <= K_KP9:
-                        self.channel = e.key - K_KP0
-                        self.special_message = Message("CHANNEL %s" % self.channel)
-                        self.show_special_message = True
+                        self.channel = e.key - K_KP1
+                        if (e.key == K_KP0): self.channel = 9
+                        self.special_message = Message("CHANNEL %s" % (self.channel + 1))
                     elif e.key == K_KP_PLUS:
                         self.octave += 1
+                        if (self.octave > 10): self.octave = 10
                         self.special_message = Message("OCTAVE %s" % self.octave)
-                        self.show_special_message = True
                     elif e.key == K_KP_MINUS:
                         self.octave -= 1
+                        if (self.octave < 0): self.octave = 0
                         self.special_message = Message("OCTAVE %s" % self.octave)
-                        self.show_special_message = True
 
                 elif e.type == KEYUP:
                     if (e.key < 256):
                         char = chr(e.key)
                         note = self.charkey_to_note(char)
-                        self.midi.note_off(note, velocity=127, channel=self.channel)
-                    self.show_special_message = False
+                        if (note >= MIN_NOTE and note <= MAX_NOTE):
+                            self.midi.note_off(note, velocity=127, channel=self.channel)
+                    self.special_message = None
                     if (self.current_char == char):
-                        self.show_text_message = False
+                        self.text_message = None
                         
             # Serial Mode
             if (self.mode == Game.MODE_SERIAL):
@@ -228,65 +247,55 @@ class Game():
                         char = chr(e.key)
                         self.current_char = char
                         self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
-                        self.show_text_message = True
                         self.serial_write(">" + char)
             
                     # special functions
                     if e.key == K_F1:
                         self.serial_write("!f")
                         self.special_message = Message("MOTOR FORWARD")
-                        self.show_special_message = True
                     elif e.key == K_F2:
                         self.serial_write("!b")
                         self.special_message = Message("MOTOR BACKWARD")
-                        self.show_special_message = True
                     elif e.key == K_F3:
                         self.serial_write("!m2")
                         self.special_message = Message("MAXIMUM VOLUME")
-                        self.show_special_message = True
                     elif e.key == K_F4:
                         self.serial_write("!m160")
                         self.special_message = Message("MAXIMUM MOVEMENT")
-                        self.show_special_message = True
                     elif e.key == K_F5:
                         self.serial_write("!p")
                         self.special_message = Message("PLAY / PAUSE")
-                        self.show_special_message = True
                     elif e.key == K_F6:
                         self.serial_write("!s")
                         self.special_message = Message("STOP")
-                        self.show_special_message = True
                     elif e.key == K_F7:
                         self.serial_write("!+")
                         self.special_message = Message("FASTER")
-                        self.show_special_message = True
                     elif e.key == K_F8:
                         self.serial_write("!-")
                         self.special_message = Message("SLOWER")
-                        self.show_special_message = True
                     elif e.key == K_F9:
                         self.serial_write("!r")
                         self.special_message = Message("RESET")
-                        self.show_special_message = True
                     elif e.key == K_F12:
                         self.special_message = Message("**RESTART**")
-                        self.show_special_message = True
                         self.ser.close()
                         self.ser = serial.Serial(self.port, self.bps, timeout=1)
                 elif e.type == KEYUP:
                     if (e.key < 256):
                         char = chr(e.key)
                         self.serial_write("<" + char)
-                    self.show_special_message = False
+                    self.special_message = None
                     if (self.current_char == char):
-                        self.show_text_message = False
+                        self.text_message = None
                         
-        if self.show_special_message:
+        if self.special_message:
             self.special_message.pos.center = (
                 VIEWPORT_SIZE[0] / 2 ,
-                VIEWPORT_SIZE[1] - self.special_message.pos.height - 10)
+                self.special_message.pos.height - 10)
             self.window.blit(self.special_message.surf, self.special_message.pos)
-        if self.show_text_message:
+        
+        if self.text_message:
             self.window.blit(self.text_message, 
                 (VIEWPORT_SIZE[0] / 2 - self.text_message.get_rect().centerx, 
                 VIEWPORT_SIZE[1] / 2 - self.text_message.get_rect().centery))
@@ -300,19 +309,19 @@ class Game():
         if event.type == KEYDOWN and event.mod == KMOD_LALT and event.key == K_RETURN:
             self.fullscreen = not self.fullscreen
             if self.fullscreen:
-                self.real_window = display.set_mode(Screen.window_rect.size, FULLSCREEN)
+                self.real_window = display.set_mode(Screen.monitor_rect.size, FULLSCREEN)
             else:
                 self.real_window = display.set_mode(Screen.window_rect.size, WINDOWED+RESIZABLE)
 
     def handle_events_resize(self, event):
         if event.type == VIDEORESIZE:
-            # force 16:9 window size
-            Screen.window_rect.size = (event.dict['size'][0], event.dict['size'][0] * 9 / 16)
             # must reset the display when resizing the window, or else you
             # can't draw on the new parts of the window.
             if self.fullscreen:
-                self.real_window = display.set_mode(Screen.window_rect.size, FULLSCREEN, BIT_DEPTH)
+                self.real_window = display.set_mode(Screen.monitor_rect.size, FULLSCREEN, BIT_DEPTH)
             else:
+                # force 16:9 window size
+                Screen.window_rect.size = (event.dict['size'][0], event.dict['size'][0] * 9 / 16)
                 self.real_window = display.set_mode(Screen.window_rect.size, WINDOWED+RESIZABLE, BIT_DEPTH)
 
     def charkey_to_note(self, char):
@@ -331,8 +340,8 @@ class Game():
         if char == ",": return self.octave * 12 + 12
         if char == "l": return self.octave * 12 + 13
         if char == ".": return self.octave * 12 + 14
-        if char == "ñ": return self.octave * 12 + 15
-        if char == "-": return self.octave * 12 + 16
+        if char == ";": return self.octave * 12 + 15
+        if char == "/": return self.octave * 12 + 16
         
         if char == "q": return self.octave * 12 + 12
         if char == "2": return self.octave * 12 + 13
@@ -351,32 +360,53 @@ class Game():
         if char == "o": return self.octave * 12 + 26
         if char == "0": return self.octave * 12 + 27
         if char == "p": return self.octave * 12 + 28
+        if char == "[": return self.octave * 12 + 29
+        if char == "=": return self.octave * 12 + 30
+        if char == "]": return self.octave * 12 + 31
         
-        return 0
+        return INVALID_NOTE
+
+    def note_to_text(self, note):
+        basenote = note % 12
+        relative_octave = str(note // 12)
+        if basenote == 0:  name = "C"
+        if basenote == 1:  name = "C#"
+        if basenote == 2:  name = "D"
+        if basenote == 3:  name = "D#"
+        if basenote == 4:  name = "E"
+        if basenote == 5:  name = "F"
+        if basenote == 6:  name = "F#"
+        if basenote == 7:  name = "G"
+        if basenote == 8:  name = "G#"
+        if basenote == 9:  name = "A"
+        if basenote == 10: name = "A#"
+        if basenote == 11: name = "B"
+        return name + relative_octave
 
     def serial_write(self, chars):
         self.ser.write(bytes(chars, "utf-8"))
         
 class Message():
     def __init__(self, text=" ", text_color=Colors.WHITE, bg_color=Colors.BLACK):
-        message_font = font.SysFont("Courier", 24)
+        message_font = font.SysFont("monospace", 24)
         text_message = message_font.render(text, NOALIAS, text_color)
+        self.text = text
         self.surf = surface.Surface(
             (text_message.get_rect().width + 20, 
             text_message.get_rect().height + 20))
         self.surf.fill(bg_color)
+        self_rect = self.surf.get_rect()
         draw.polygon(self.surf, Colors.WHITE, (
             (0, 0), 
-            (self.surf.get_rect().width - 1, 0), 
-            (self.surf.get_rect().width - 1, self.surf.get_rect().height - 1), 
-            (0, self.surf.get_rect().height - 1)
+            (self_rect.width - 1, 0), 
+            (self_rect.width - 1, self_rect.height - 1), 
+            (0, self_rect.height - 1)
             ), 1)
         
         self.surf.blit(text_message, (10, text_message.get_rect().centery - 2))
         self.pos = rect.Rect(
-                0, 0, self.surf.get_rect().width, self.surf.get_rect().height)
+                0, 0, self_rect.width, self_rect.height)
 
 if __name__ == "__main__":
     game = Game()
     game.main()
-    
