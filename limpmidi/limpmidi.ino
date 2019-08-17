@@ -123,19 +123,19 @@ char debug_string_buffer[20];
   Serial.print(debug_string_buffer)
 
 void setup() {
-  
+
   //randomSeed(analogRead(0)); // init random seed
-  
+
   pinMode(PIN_LED, OUTPUT);
   for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     pinMode(PIN_CONTROL_STEP + f * 2, OUTPUT);
     pinMode(PIN_CONTROL_DIRECTION + f * 2, OUTPUT);
   }
-  
+
   //delay(1000);
   digitalWrite(PIN_LED, HIGH);
-  
-  // reset position: set direction to backwards until the 0 position 
+
+  // reset position: set direction to backwards until the 0 position
   // is reached
   for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
     digitalWrite(PIN_CONTROL_DIRECTION + f * 2, DIRECTION_BACKWARDS);
@@ -167,9 +167,9 @@ void setup() {
     currentPeriod[f] = 0;
     tick[f] = 0;
   }
-  
+
   //delay(2000);
-  
+
   Timer1.initialize(CYCLE_PERIOD);
   Timer1.attachInterrupt(noteSetter);
   Timer1.start();
@@ -205,7 +205,7 @@ void noteSetter() {
 }
 
 void loop() {
-  
+
   if (USE_MIDI) {
     midiEventPacket_t rx;
     do {
@@ -220,19 +220,13 @@ void loop() {
         Serial.print(channel);
         Serial.print(", n ");
         Serial.print(note);
+        Serial.print(", m");
+        Serial.print(message);
         Serial.print(", v");
         Serial.print(velocity);
         Serial.print("\n");
-        
+
         if (channel == 1 || channel == 2 || channel == 3 || channel == 4) {
-          if (message == MESSAGE_NOTE_ON || message == MESSAGE_NOTE_OFF) {
-            //~ Serial.print(channel);
-            //~ Serial.print(": ");
-            //~ Serial.print(rx.byte2);
-            //~ Serial.print("@");
-            //~ Serial.print(rx.byte3);
-            //~ Serial.print("\n");
-          }
           switch (note) {
             case pitchB5:  nextPeriod = B_4;   break;
             case pitchB5b: nextPeriod = Bb_4;  break;
@@ -246,7 +240,7 @@ void loop() {
             case pitchD5:  nextPeriod = D_4;   break;
             case pitchD5b: nextPeriod = Db_4;  break;
             case pitchC5:  nextPeriod = C_4;   break; // C4
-            
+
             case pitchB4:  nextPeriod = B_3;   break;
             case pitchB4b: nextPeriod = Bb_3;  break;
             case pitchA4:  nextPeriod = A_3;   break;
@@ -259,7 +253,7 @@ void loop() {
             case pitchD4:  nextPeriod = D_3;   break;
             case pitchD4b: nextPeriod = Db_3;  break;
             case pitchC4:  nextPeriod = C_3;   break; // C4
-            
+
             case pitchB3:  nextPeriod = B_2;   break;
             case pitchB3b: nextPeriod = Bb_2;  break;
             case pitchA3:  nextPeriod = A_2;   break;
@@ -272,7 +266,7 @@ void loop() {
             case pitchD3:  nextPeriod = D_2;   break;
             case pitchD3b: nextPeriod = Db_2;  break;
             case pitchC3:  nextPeriod = C_2;   break; // C3
-            
+
             case pitchB2:  nextPeriod = B_2;   break;
             case pitchB2b: nextPeriod = Bb_2;  break;
             case pitchA2:  nextPeriod = A_2;   break;
@@ -285,8 +279,10 @@ void loop() {
             case pitchD2:  nextPeriod = D_2;   break;
             case pitchD2b: nextPeriod = Db_2;  break;
             case pitchC2:  nextPeriod = C_2;   break; // C3
+
+            default:       nextPeriod = REST;  break;
           }
-          if (message == MESSAGE_NOTE_ON) {
+          if (message == MESSAGE_NOTE_ON && nextPeriod != REST) {
             playCurrentNote[channel - 1] = true;
             currentPeriod[channel - 1] = nextPeriod;
             tick[channel - 1] = 0;
@@ -296,7 +292,7 @@ void loop() {
             playCurrentNote[channel - 1] = false;
           }
           //~ nextPeriod = REST;
-            
+
         }
         // send back the received MIDI command
         //MidiUSB.sendMIDI(rx);
@@ -310,45 +306,45 @@ void loop() {
   if (autoPlay) {
     if (!autoPlayingNote && noteChangeCounter >= noteChangeThreshold) {
       digitalWrite(PIN_LED, HIGH);
-      
+
       autoPlayingNote = true;
       playCurrentNote[AUTO_PLAY_FLOPPY] = true;
 
       currentPeriod[AUTO_PLAY_FLOPPY] = NOTE_LIST[noteListIndex];
       tick[AUTO_PLAY_FLOPPY] = 0;
-      
+
       noteListIndex++;
       if (NOTE_LIST[noteListIndex - 1] == END) {
         noteListIndex = 0;
         currentPeriod[AUTO_PLAY_FLOPPY] = NOTE_LIST[noteListIndex];
         noteListIndex++;
       }
-      
+
       printCurrentNote(AUTO_PLAY_FLOPPY);
     }
-  
+
     // if a note is playing, every noteChangeThreshold ms, silence note
     if (autoPlayingNote && noteChangeCounter >= noteChangeThreshold * 2) {
       digitalWrite(PIN_LED, LOW);
-      
+
       autoPlayingNote = false;
       playCurrentNote[AUTO_PLAY_FLOPPY] = false;
       currentPeriod[AUTO_PLAY_FLOPPY] = 0;
       tick[AUTO_PLAY_FLOPPY] = 0;
-      
+
       noteChangeCounter = 0;
-      
+
       if (USE_SERIAL) {
         Serial.println("stop");
       }
     }
-    
+
   }
 
   if (USE_SERIAL) {
     if (Serial.available() > 0) {
       incomingByte = Serial.read();
-      
+
       switch (incomingByte) {
         case '>':
         case '<':
@@ -366,7 +362,7 @@ void loop() {
             case 'w': nextPeriod = D_4;   break;
             case '2': nextPeriod = Db_4;  break;
             case 'q': nextPeriod = C_4;   break; // C4
-            
+
             case '-': nextPeriod = E_4;   break;
             case '\'': nextPeriod = Eb_4;  break;
             case '.': nextPeriod = D_4;   break;
@@ -384,23 +380,22 @@ void loop() {
             case 'x': nextPeriod = D_3;   break;
             case 's': nextPeriod = Db_3;  break;
             case 'z': nextPeriod = C_3;   break; // C3
-            
-            //default: playCurrentNote[MANUAL_PLAY_FLOPPY] = false; break;
+
           }
           if (incomingByte == '>' && nextPeriod != REST) {
             // find first available floppy
             initialFloppy = currentFloppy;
             availableFloppyFound = false;
-            
+
             while (true) {
               currentFloppy++;
               if (currentFloppy == NUMBER_OF_FLOPPIES) currentFloppy = FIRST_MANUAL_PLAY_FLOPPY;
-              
+
               if (playCurrentNote[currentFloppy] == false) {
                 availableFloppyFound = true;
                 break;
               }
-              
+
               // after cycling through all floppies, exit
               if (initialFloppy == currentFloppy) break;
             }
@@ -510,7 +505,7 @@ void loop() {
       }
     }
   }
-  
+
 }
 
 void printCurrentNote(unsigned char floppy) {
@@ -540,9 +535,9 @@ void printCurrentNote(unsigned char floppy) {
       case D_3:  Serial.println("D3");  break;
       case Db_3: Serial.println("Db3"); break;
       case C_3:  Serial.println("C3");  break;
-      
+
       // special case
       case REST: Serial.println("REST");break;
-    }    
+    }
   }
 }
