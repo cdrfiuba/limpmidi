@@ -12,7 +12,7 @@ import serial
 import serial.tools.list_ports
 import argparse
 
-VERSION = 0.3
+VERSION = 0.4
 
 DEBUG = True
 
@@ -64,6 +64,7 @@ class Colors():
     SKIN = (248, 218, 163)
     RED = (255, 0, 0)
     DARK_RED = (180, 0, 0)
+    TEAL = (0, 180, 180)
 
 class Game():
     MODE_MIDI, MODE_SERIAL = list(range(2))
@@ -99,12 +100,12 @@ class Game():
             self.list_ports()
             parser.exit()
 
-        if not args.serial_output and not args.midi:
+        if not args.serial_output and args.midi == None:
             print("Error: Serial port or MIDI device is missing.\n")
             self.list_ports()
             parser.exit()
         
-        if args.serial_output and args.midi:
+        if args.serial_output and args.midi != None:
             print("Error: Must only specify Serial or MIDI.")
             parser.exit()
             
@@ -119,7 +120,7 @@ class Game():
             self.port = args.serial_output or args.serial_input
             self.ser = serial.Serial(self.port, self.bps, timeout=1)
         
-        if args.midi:
+        if args.midi != None:
             self.mode = Game.MODE_MIDI
             # midi init
             midi.init()
@@ -129,6 +130,11 @@ class Game():
         # for use with notes
         self.octave = 4
         self.channel = 1
+        self.notes = []
+        self.pressed_notes = []
+        self.pressed_notes_text = []
+        self.released_notes = []
+        self.pixels_to_move_keyboard = 0
         
         # pygame init
         display.init()
@@ -147,14 +153,42 @@ class Game():
         clock = time.Clock()
         
         # fonts        
+        self.key_font = font.SysFont("monospace", 8, bold=True)
         self.osd_font = font.SysFont("monospace", 14)
         self.title_font = font.SysFont("monospace", 24) # @800x600, max 56 chars
-        self.big_font = font.SysFont("monospace", 60, bold=True)
+        self.big_font = font.SysFont("monospace", 50, bold=True)
 
         # pseudo message box
         self.special_message = None
-        self.text_message = self.big_font.render("", NOALIAS, Colors.WHITE)
+        self.text_message = None
         self.current_char = ""
+        
+        # keyboard drawing
+        previous_white_note = KeyboardNote(KeyboardNote.WHITE_KEY)
+        previous_white_note.pos.x = (-previous_white_note.pos.width - 1) * 24
+        previous_white_note.pos.bottom = self.window.get_rect().bottom - 2
+        black_keys = []
+        white_keys = []
+        for note in range(MIN_NOTE, MAX_NOTE + 1):
+            n = note % 12
+            if n == 1 or n == 3 or n == 6 or n == 8 or n == 10:
+                new_note = KeyboardNote(KeyboardNote.BLACK_KEY, note)
+                x_movement = -new_note.pos.width / 2 + 1
+            else:
+                new_note = KeyboardNote(KeyboardNote.WHITE_KEY, note)
+                x_movement = 1
+            new_note.pos.topleft = previous_white_note.pos.topright
+            new_note.pos.x += x_movement
+                
+            previous_note = new_note
+            if n == 1 or n == 3 or n == 6 or n == 8 or n == 10:
+                black_keys.append(new_note)
+            else:
+                previous_white_note = new_note
+                white_keys.append(new_note)
+                
+        # union of notes with black keys at the end so they get draw on top
+        self.notes = white_keys + black_keys
         
         # background
         bg = surface.Surface(VIEWPORT_SIZE)
@@ -208,42 +242,44 @@ class Game():
             char = ""
             
             # Midi Mode
-            if (self.mode == Game.MODE_MIDI):
+            if self.mode == Game.MODE_MIDI:
                 if e.type == KEYDOWN:
-                    if (e.key < 256):
-                        char = chr(e.key)
-                        self.current_char = char
-                        note = self.charkey_to_note(char)
-                        if (note >= MIN_NOTE and note <= MAX_NOTE):
-                            self.text_message = self.big_font.render(self.note_to_text(note), NOALIAS, Colors.WHITE)
-                            self.midi.note_on(note, velocity=127, channel=self.channel)
+                    note = self.charkey_to_note(key.name(e.key))
+                    if note >= MIN_NOTE and note <= MAX_NOTE:
+                        self.midi.note_on(note, velocity=127, channel=self.channel)
+                        self.pressed_notes.append(note)
+                        self.pressed_notes_text.append(note)
                     if e.key >= K_KP0 and e.key <= K_KP9:
                         self.channel = e.key - K_KP1
-                        if (e.key == K_KP0): self.channel = 9
+                        if e.key == K_KP0: self.channel = 9
                         self.special_message = Message("CHANNEL %s" % (self.channel + 1))
-                    elif e.key == K_KP_PLUS:
+                    elif e.key == K_KP_PLUS and not self.pressed_notes_text:
                         self.octave += 1
-                        if (self.octave > 10): self.octave = 10
+                        if self.octave <= 10:
+                            self.pixels_to_move_keyboard += 7 * (KeyboardNote.SIZE_WHITE_KEY[0] + 1)
+                        else:
+                            self.octave = 10
                         self.special_message = Message("OCTAVE %s" % self.octave)
-                    elif e.key == K_KP_MINUS:
+                    elif e.key == K_KP_MINUS and not self.pressed_notes_text:
                         self.octave -= 1
-                        if (self.octave < 0): self.octave = 0
+                        if self.octave >= 0:
+                            self.pixels_to_move_keyboard -= 7 * (KeyboardNote.SIZE_WHITE_KEY[0] + 1)
+                        else:
+                            self.octave = 0
                         self.special_message = Message("OCTAVE %s" % self.octave)
 
                 elif e.type == KEYUP:
-                    if (e.key < 256):
-                        char = chr(e.key)
-                        note = self.charkey_to_note(char)
-                        if (note >= MIN_NOTE and note <= MAX_NOTE):
-                            self.midi.note_off(note, velocity=127, channel=self.channel)
+                    note = self.charkey_to_note(key.name(e.key))
+                    if note >= MIN_NOTE and note <= MAX_NOTE:
+                        self.midi.note_off(note, velocity=127, channel=self.channel)
+                        self.released_notes.append(note)
+                        self.pressed_notes_text.remove(note) # TODO: crashes when changing octaves
                     self.special_message = None
-                    if (self.current_char == char):
-                        self.text_message = None
                         
             # Serial Mode
-            if (self.mode == Game.MODE_SERIAL):
+            if self.mode == Game.MODE_SERIAL:
                 if e.type == KEYDOWN:
-                    if (e.key < 256):
+                    if e.key < 256:
                         char = chr(e.key)
                         self.current_char = char
                         self.text_message = self.big_font.render(char.upper(), NOALIAS, Colors.WHITE)
@@ -282,23 +318,61 @@ class Game():
                         self.ser.close()
                         self.ser = serial.Serial(self.port, self.bps, timeout=1)
                 elif e.type == KEYUP:
-                    if (e.key < 256):
+                    if e.key < 256:
                         char = chr(e.key)
                         self.serial_write("<" + char)
                     self.special_message = None
-                    if (self.current_char == char):
+                    if self.current_char == char:
                         self.text_message = None
                         
         if self.special_message:
             self.special_message.pos.center = (
-                VIEWPORT_SIZE[0] / 2 ,
+                VIEWPORT_SIZE[0] / 2,
                 self.special_message.pos.height - 10)
             self.window.blit(self.special_message.surf, self.special_message.pos)
         
+        if self.mode == Game.MODE_MIDI:
+            text_message = ""
+            for note in self.pressed_notes_text:
+                text_message += self.note_to_text(note) + " "
+            if text_message:
+                text_message = text_message[:-len(" ")]
+                self.text_message = self.big_font.render(text_message, NOALIAS, Colors.WHITE)
+            else:
+                self.text_message = None
+        
         if self.text_message:
             self.window.blit(self.text_message, 
-                (VIEWPORT_SIZE[0] / 2 - self.text_message.get_rect().centerx, 
+                (0, 
                 VIEWPORT_SIZE[1] / 2 - self.text_message.get_rect().centery))
+                
+        # drawing keyboard
+        for note in self.notes:
+            if note.note_number in self.pressed_notes:
+                note.change_state()
+                note.repaint()
+                self.pressed_notes.remove(note.note_number)
+            if note.note_number in self.released_notes:
+                note.change_state()
+                note.repaint()
+                self.released_notes.remove(note.note_number)
+            if self.pixels_to_move_keyboard > 0:
+                note.pos.x -= 7
+            elif self.pixels_to_move_keyboard < 0:
+                note.pos.x += 7
+            self.window.blit(note.surf, note.pos)
+        if self.pixels_to_move_keyboard > 0:
+            self.pixels_to_move_keyboard -= 7
+        elif self.pixels_to_move_keyboard < 0:
+            self.pixels_to_move_keyboard += 7
+            
+        # debug drawing of note numbers on top of notes
+        if DEBUG:
+            for note in self.notes:
+                note_number = self.key_font.render(str(note.note_number), NOALIAS, Colors.RED)
+                note_pos = (note.pos.centerx - note_number.get_rect().width / 2 + 1,
+                            note.pos.bottom - note_number.get_rect().height)
+                self.window.blit(note_number, note_pos)
 
     def handle_events_quit(self, event):
         if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
@@ -404,8 +478,55 @@ class Message():
             ), 1)
         
         self.surf.blit(text_message, (10, text_message.get_rect().centery - 2))
-        self.pos = rect.Rect(
-                0, 0, self_rect.width, self_rect.height)
+        self.pos = rect.Rect(0, 0, self_rect.width, self_rect.height)
+        
+class KeyboardNote():
+    BLACK_KEY, WHITE_KEY = list(range(2))
+
+    COLOR_WHITE_FG = (255, 255, 230)
+    COLOR_WHITE_BORDER = (255, 255, 255)
+    SIZE_WHITE_KEY = (16, 70)
+    COLOR_BLACK_FG = (30, 30, 30)
+    COLOR_BLACK_BORDER = (100, 100, 100)
+    SIZE_BLACK_KEY = (11, 40)
+    
+    def __init__(self, black_or_white=None, note_number=0):
+        self.black_or_white = black_or_white
+        self.note_number = note_number
+        self.pressed_state = False
+        self.repaint()
+        if self.black_or_white == KeyboardNote.WHITE_KEY:
+            size = KeyboardNote.SIZE_WHITE_KEY
+        if self.black_or_white == KeyboardNote.BLACK_KEY:
+            size = KeyboardNote.SIZE_BLACK_KEY
+        self.pos = rect.Rect(0, 0, size[0], size[1])
+        
+    def change_state(self):
+        self.pressed_state =  not self.pressed_state
+        
+    def repaint(self):
+        if self.black_or_white == KeyboardNote.WHITE_KEY:
+            key_color = KeyboardNote.COLOR_WHITE_FG
+            border_color = KeyboardNote.COLOR_WHITE_BORDER
+            highlight_color = Colors.TEAL
+            size = KeyboardNote.SIZE_WHITE_KEY
+        if self.black_or_white == KeyboardNote.BLACK_KEY:
+            key_color = KeyboardNote.COLOR_BLACK_FG
+            border_color = KeyboardNote.COLOR_BLACK_BORDER
+            size = KeyboardNote.SIZE_BLACK_KEY
+            highlight_color = Colors.TEAL
+        self.surf = surface.Surface(size)
+        if self.pressed_state:
+            key_color = highlight_color
+        self.surf.fill(key_color)
+        self_rect = self.surf.get_rect()
+        draw.polygon(self.surf, border_color, (
+            (0, 0), 
+            (self_rect.width - 1, 0), 
+            (self_rect.width - 1, self_rect.height - 1), 
+            (0, self_rect.height - 1)
+            ), 1)
+        
 
 if __name__ == "__main__":
     game = Game()
