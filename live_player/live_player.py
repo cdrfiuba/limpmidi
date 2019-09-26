@@ -162,6 +162,12 @@ class Game():
         self.special_message = None
         self.text_message = None
         self.current_char = ""
+
+        # init pseudo message box depending on mode
+        if self.mode == Game.MODE_SERIAL:
+            self.device_name = Message("Serial port %s" % self.port)
+        if self.mode == Game.MODE_MIDI:
+            self.device_name = Message("MIDI port %s" % self.port)
         
         # keyboard drawing
         previous_white_note = KeyboardNote(KeyboardNote.WHITE_KEY)
@@ -187,7 +193,7 @@ class Game():
                 previous_white_note = new_note
                 white_keys.append(new_note)
                 
-        # union of notes with black keys at the end so they get draw on top
+        # union of notes with black keys at the end so they get drawn on top
         self.notes = white_keys + black_keys
         
         # background
@@ -239,7 +245,6 @@ class Game():
             self.handle_events_quit(e)
             self.handle_events_resize(e)
             self.handle_events_fullscreen(e)
-            char = ""
             
             # Midi Mode
             if self.mode == Game.MODE_MIDI:
@@ -273,11 +278,12 @@ class Game():
                     if note >= MIN_NOTE and note <= MAX_NOTE:
                         self.midi.note_off(note, velocity=127, channel=self.channel)
                         self.released_notes.append(note)
-                        self.pressed_notes_text.remove(note) # TODO: crashes when changing octaves
+                        self.pressed_notes_text.remove(note)
                     self.special_message = None
                         
             # Serial Mode
             if self.mode == Game.MODE_SERIAL:
+                char = ""
                 if e.type == KEYDOWN:
                     if e.key < 256:
                         char = chr(e.key)
@@ -324,13 +330,15 @@ class Game():
                     self.special_message = None
                     if self.current_char == char:
                         self.text_message = None
-                        
+               
+        # blit messages   
         if self.special_message:
             self.special_message.pos.center = (
                 VIEWPORT_SIZE[0] / 2,
-                self.special_message.pos.height - 10)
+                VIEWPORT_SIZE[1] - 100)
             self.window.blit(self.special_message.surf, self.special_message.pos)
         
+        # note names text
         if self.mode == Game.MODE_MIDI:
             text_message = ""
             for note in self.pressed_notes_text:
@@ -341,10 +349,17 @@ class Game():
             else:
                 self.text_message = None
         
+        # blit note names, or key names
         if self.text_message:
             self.window.blit(self.text_message, 
                 (0, 
-                VIEWPORT_SIZE[1] / 2 - self.text_message.get_rect().centery))
+                VIEWPORT_SIZE[1] / 2 - self.text_message.get_rect().centery - 10))
+
+        # blit current mode and device name
+        self.device_name.pos.topright = (
+            VIEWPORT_SIZE[0] - 5,
+            5)
+        self.window.blit(self.device_name.surf, self.device_name.pos)
                 
         # drawing keyboard
         for note in self.notes:
@@ -376,7 +391,8 @@ class Game():
 
     def handle_events_quit(self, event):
         if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-            self.midi.close()
+            if self.mode == Game.MODE_MIDI:
+                self.midi.close()
             sys.exit()
 
     def handle_events_fullscreen(self, event):
@@ -414,8 +430,10 @@ class Game():
         if char == ",": return self.octave * 12 + 12
         if char == "l": return self.octave * 12 + 13
         if char == ".": return self.octave * 12 + 14
-        if char == ";": return self.octave * 12 + 15
-        if char == "/": return self.octave * 12 + 16
+        if char == ";": return self.octave * 12 + 15 # windows
+        if char == "ñ": return self.octave * 12 + 15 # linux
+        if char == "/": return self.octave * 12 + 16 # windows
+        if char == "-": return self.octave * 12 + 16 # linux
         
         if char == "q": return self.octave * 12 + 12
         if char == "2": return self.octave * 12 + 13
@@ -442,7 +460,7 @@ class Game():
 
     def note_to_text(self, note):
         basenote = note % 12
-        relative_octave = str(note // 12)
+        relative_octave = str(note // 12 - 1)
         if basenote == 0:  name = "C"
         if basenote == 1:  name = "C#"
         if basenote == 2:  name = "D"
