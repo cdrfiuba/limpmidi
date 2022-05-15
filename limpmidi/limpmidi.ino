@@ -4,12 +4,12 @@
 
 const bool USE_SERIAL = true;
 const long int SERIAL_BPS = 115200;
-const bool USE_MIDI = true;
+const bool USE_MIDI = false;
 
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 1; // rojo
 const int PIN_CONTROL_DIRECTION = 0; // azul
-const unsigned char NUMBER_OF_FLOPPIES = 4;
+const unsigned char NUMBER_OF_FLOPPIES = 3;
 const int MAX_POSITION = 80; // fd has 80 tracks
 const unsigned int INITIAL_MAX_MOTOR_MOVEMENT = 2; // 160 produces full movement, 2 makes louder sound
 unsigned int maxMotorMovement = INITIAL_MAX_MOTOR_MOVEMENT;
