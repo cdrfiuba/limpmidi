@@ -2,9 +2,9 @@
 #include <MIDIUSB.h>
 #include <pitchToNote.h>
 
-const bool USE_SERIAL = true;
+const bool USE_SERIAL = false;
 const long int SERIAL_BPS = 115200;
-const bool USE_MIDI = false;
+const bool USE_MIDI = true;
 
 const int PIN_LED = 13;
 const int PIN_CONTROL_STEP = 1; // rojo
@@ -283,13 +283,18 @@ void loop() {
             default:       nextPeriod = REST;  break;
           }
           if (message == MESSAGE_NOTE_ON && nextPeriod != REST) {
-            playCurrentNote[channel - 1] = true;
-            currentPeriod[channel - 1] = nextPeriod;
-            tick[channel - 1] = 0;
+            for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              playCurrentNote[f] = true;
+              currentPeriod[f] = nextPeriod;
+              tick[f] = 0;
+            }
+            
             //~ printCurrentNote(channel - 1);
           }
-          if (message == MESSAGE_NOTE_OFF) {
-            playCurrentNote[channel - 1] = false;
+          if (message == MESSAGE_NOTE_OFF && currentPeriod[0] == nextPeriod) {
+            for (unsigned char f = 0; f < NUMBER_OF_FLOPPIES; f++) {
+              playCurrentNote[f] = false;
+            }
           }
           //~ nextPeriod = REST;
 
